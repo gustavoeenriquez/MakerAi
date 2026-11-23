@@ -572,6 +572,17 @@ begin
     .Input('rag:gql:weight')
     .ExpectEquals('Alta,Ana|');
 
+  FRunner.AddCase('rag.gql.funcs')
+    .Input('rag:gql:funcs')
+    .ExpectEquals('Huila Reserva|Tolima Suave|Huila Reserva|Huila Reserva,Tolima Suave|Narino Alto,Tolima Suave|' +
+      'Alta,Ana|Alta|Alta,Baja|Huila Reserva,Narino Alto|Huila Reserva|Huila Reserva|' +
+      'error:EGQLParserError|error:EGQLParserError|error:EGQLParserError');
+
+  FRunner.AddCase('rag.gql.arith')
+    .Input('rag:gql:arith')
+    .ExpectEquals('Huila Reserva|Tolima Suave|Narino Alto|Huila Reserva|Tolima Suave|Huila Reserva||' +
+      'Huila Reserva|Huila Reserva,Tolima Suave|Huila Reserva,Tolima Suave');
+
   // Indice basico (TAIBasicIndex): la via rapida del motor tomaba el score de Node.Idx,
   // que este indice nunca escribe. Devolvia lo que dejo la busqueda anterior (aqui
   // 'beta' con 0.99, otra consulta) o cero y nada. Ahora SearchScored trae el suyo.
@@ -5512,6 +5523,34 @@ begin
     else if Id = 'weight' then
       Result := Q('MATCH (p:Persona)-[r:NO_LE_GUSTO]->(a) WHERE r.weight > 0.5', []) + '|' +
         Q('MATCH (p:Persona)-[r:NO_LE_GUSTO]->(a) WHERE r.weight > 0.9', [])
+    else if Id = 'funcs' then
+      // Fase 3: funciones de texto, nulos, grafo, listas y fechas; errores de nombre, aridad y variable
+      Result := Q('MATCH (c:Producto) WHERE lower(c.name) = ''huila reserva''', []) + '|' +
+        Q('MATCH (c:Producto) WHERE toUpper(c.origen) STARTS WITH ''TOL''', []) + '|' +
+        Q('MATCH (c:Producto) WHERE size(c.name) > 12', []) + '|' +
+        Q('MATCH (c:Producto) WHERE substring(c.name, 0, 5) = ''Huila'' OR right(c.name, 5) = ''Suave''', []) + '|' +
+        Q('MATCH (c:Producto) WHERE coalesce(c.zona, ''ninguna'') = ''ninguna'' AND NOT exists(c.`zona cafetera`)', []) + '|' +
+        Q('MATCH (p)-[r]->(a) WHERE type(r) = ''NO_LE_GUSTO''', []) + '|' +
+        Q('MATCH (a:Acidez) WHERE degree(a) >= 3', []) + '|' +
+        Q('MATCH (a) WHERE ''Acidez'' IN labels(a)', []) + '|' +
+        Q('MATCH (c:Producto) WHERE id(c) = ''p2'' OR toInteger(c.precio) = 42000', []) + '|' +
+        Q('MATCH (c:Producto) WHERE year(date(''2026-11-23'')) = 2026 AND month(''2026-11-23'') = 11 AND c.origen = ''Huila''', []) + '|' +
+        Q('MATCH (c:Producto) WHERE ''Reserva'' IN split(c.name, '' '')', []) + '|' +
+        Q('MATCH (c:Producto) WHERE foo(c.name) = 1', []) + '|' +
+        Q('MATCH (c:Producto) WHERE lower(c.name, 2) = ''x''', []) + '|' +
+        Q('MATCH (c:Producto) WHERE id(c.name) = ''x''', [])
+    else if Id = 'arith' then
+      // Fase 3: aritmetica con precedencia, NULL en division por cero, concatenacion sin coma decimal
+      Result := Q('MATCH (c:Producto) WHERE c.precio * 1.19 > 46000', []) + '|' +
+        Q('MATCH (c:Producto) WHERE c.precio - 25000 = 0', []) + '|' +
+        Q('MATCH (c:Producto) WHERE (c.precio + 2000) / 2 = 20000', []) + '|' +
+        Q('MATCH (c:Producto) WHERE c.precio % 1000 = 0.5', []) + '|' +
+        Q('MATCH (c:Producto) WHERE c.origen + ''-'' + c.name = ''Tolima-Tolima Suave''', []) + '|' +
+        Q('MATCH (c:Producto) WHERE 2 + 3 * 10 = 32 AND c.origen = ''Huila''', []) + '|' +
+        Q('MATCH (c:Producto) WHERE c.precio / 0 > 1', []) + '|' +
+        Q('MATCH (c:Producto) WHERE -c.precio < -40000', []) + '|' +
+        Q('MATCH (c:Producto) WHERE round(c.precio / 1000) = 42 OR round(2.5) = 3 AND c.origen = ''Tolima''', []) + '|' +
+        Q('MATCH (c:Producto) WHERE ''P'' + c.precio = ''P42000.5'' OR toString(c.precio) = ''25000''', [])
     else
       raise Exception.Create('Escenario GQL desconocido: ' + AScenario);
   finally

@@ -61,7 +61,12 @@ type
 
     // Parámetros y fin de sentencia
     tkParameter, // $nombre (Text = nombre sin el $)
-    tkSemicolon); // ;
+    tkSemicolon, // ;
+
+    // Aritmética (el - es tkDash y el * es tkAsterisk)
+    tkPlus, // +
+    tkSlash, // /
+    tkPercent); // %
 
   TGraphCommandType = (cmdNone, cmdShowLabels, cmdShowEdges, cmdShortestPath, cmdCentrality, cmdDegrees);
 
@@ -142,7 +147,11 @@ type
     function ParseAndExpression: TGraphExpression;
     function ParseNotExpression: TGraphExpression;
     function ParseComparison: TGraphExpression;
+    function ParseAdditive: TGraphExpression; // + -
+    function ParseMultiplicative: TGraphExpression; // * / %
+    function ParseUnary: TGraphExpression; // -x
     function ParsePrimary: TGraphExpression;
+    function ParseFunctionCall(const AName: string; APosition: Integer): TGraphExpression;
     function ParseValueList: Variant;
     function ParseInList: TGraphExpression;
 
@@ -522,6 +531,12 @@ begin
       Single(tkAsterisk);
     ';':
       Single(tkSemicolon);
+    '+':
+      Single(tkPlus);
+    '/': // // y /* ya los saltó SkipWhitespace como comentarios
+      Single(tkSlash);
+    '%':
+      Single(tkPercent);
 
     // Operadores Compuestos que empiezan con '<'
     '<':
@@ -800,14 +815,16 @@ function TGraphParser.ParseInList: TGraphExpression;
 var
   V: Variant;
 begin
-  // IN [a, b, c]  o  IN $lista (un VarArray, o un valor suelto)
-  if FCurrent.Kind = tkParameter then
+  // IN [a, b, c], IN $lista (un VarArray, o un valor suelto) o IN expresion-que-da-lista (labels(n), split(...))
+  if FCurrent.Kind = tkLBracket then
+    V := ParseValueList
+  else if FCurrent.Kind = tkParameter then
   begin
     V := ParamValue(FCurrent.Text, FCurrent.Position);
     Next;
   end
   else
-    V := ParseValueList;
+    Exit(ParseAdditive);
   Result := TLiteralExpr.Create(V);
 end;
 
@@ -1056,7 +1073,7 @@ var
   Op: TBinaryOp;
   Negated: Boolean;
 begin
-  L := ParsePrimary;
+  L := ParseAdditive;
   try
     // --- Operadores IS (IS NULL, IS NOT NULL) ---
     if FCurrent.Kind = tkIs then
@@ -1098,10 +1115,10 @@ begin
     begin
       // x BETWEEN a AND b (ambos extremos incluidos). El AND es parte del BETWEEN.
       Next;
-      Lo := ParsePrimary;
+      Lo := ParseAdditive;
       try
         Expect(tkAnd);
-        Hi := ParsePrimary;
+        Hi := ParseAdditive;
       except
         Lo.Free;
         raise;
@@ -1116,7 +1133,7 @@ begin
         Op := opEndsWith;
       Next;
       ExpectWord('WITH');
-      Result := TBinaryExpr.Create(L, Op, ParsePrimary);
+      Result := TBinaryExpr.Create(L, Op, ParseAdditive);
     end
     else if FCurrent.Kind in [tkEqual, tkNotEqual, tkGreater, tkGreaterEqual, tkLess, tkLessEqual, tkContains, tkLike, tkILike] then
     begin
@@ -1146,7 +1163,7 @@ begin
         raise EGQLParserError.CreateAt(AiStr('rag.gql.not_in'), FCurrent.Position);
 
       Next; // Consumir el operador
-      Result := TBinaryExpr.Create(L, Op, ParsePrimary);
+      Result := TBinaryExpr.Create(L, Op, ParseAdditive);
     end
     else if Negated then
       raise EGQLParserError.CreateAt(AiStr('rag.gql.not_in'), FCurrent.Position)
@@ -1161,11 +1178,85 @@ begin
     Result := TUnaryExpr.Create(uoNot, Result);
 end;
 
+// --- Aritmética: + - (aditiva) < * / % (multiplicativa) < signo ---
+
+function TGraphParser.ParseAdditive: TGraphExpression;
+var
+  L: TGraphExpression;
+  Op: TBinaryOp;
+begin
+  L := ParseMultiplicative;
+  try
+    while FCurrent.Kind in [tkPlus, tkDash] do
+    begin
+      if FCurrent.Kind = tkPlus then
+        Op := opAdd
+      else
+        Op := opSub;
+      Next;
+      L := TBinaryExpr.Create(L, Op, ParseMultiplicative);
+    end;
+  except
+    L.Free;
+    raise;
+  end;
+  Result := L;
+end;
+
+function TGraphParser.ParseMultiplicative: TGraphExpression;
+var
+  L: TGraphExpression;
+  Op: TBinaryOp;
+begin
+  L := ParseUnary;
+  try
+    while FCurrent.Kind in [tkAsterisk, tkSlash, tkPercent] do
+    begin
+      case FCurrent.Kind of
+        tkAsterisk:
+          Op := opMul;
+        tkSlash:
+          Op := opDiv;
+      else
+        Op := opMod;
+      end;
+      Next;
+      L := TBinaryExpr.Create(L, Op, ParseUnary);
+    end;
+  except
+    L.Free;
+    raise;
+  end;
+  Result := L;
+end;
+
+function TGraphParser.ParseUnary: TGraphExpression;
+var
+  Operand: TGraphExpression;
+begin
+  // Signo negativo: -5, -$limite, -(a.x), -c.precio
+  if FCurrent.Kind = tkDash then
+  begin
+    Next;
+    Operand := ParseUnary;
+    if (Operand is TLiteralExpr) and VarIsNumeric(TLiteralExpr(Operand).Value) and
+      not VarIsType(TLiteralExpr(Operand).Value, varBoolean) then
+    begin
+      TLiteralExpr(Operand).Value := -TLiteralExpr(Operand).Value;
+      Result := Operand;
+    end
+    else
+      Result := TUnaryExpr.Create(uoNegate, Operand);
+  end
+  else
+    Result := ParsePrimary;
+end;
+
 function TGraphParser.ParsePrimary: TGraphExpression;
 var
   V, P: string;
   Value: Variant;
-  Operand: TGraphExpression;
+  TokPos: Integer;
 begin
   case FCurrent.Kind of
     tkLParen: // Agrupación: (expresión)
@@ -1180,13 +1271,31 @@ begin
         end;
       end;
 
-    // Acceso a propiedad (ej: n.nombre)
+    // n.nombre (propiedad), lower(...) (función) o n (variable suelta, p. ej. id(n))
     tkIdentifier:
       begin
-        V := GetTokenTextAndNext; // Consume variable
-        Expect(tkDot); // Consume punto
-        P := TakePropertyKey; // Nombre de la propiedad
-        Result := TPropertyExpr.Create(V, P);
+        TokPos := FCurrent.Position;
+        V := GetTokenTextAndNext;
+        if FCurrent.Kind = tkDot then
+        begin
+          Next;
+          P := TakePropertyKey;
+          Result := TPropertyExpr.Create(V, P);
+        end
+        else if FCurrent.Kind = tkLParen then
+          Result := ParseFunctionCall(V, TokPos)
+        else
+          Result := TVariableExpr.Create(V);
+      end;
+
+    // labels(n): LABELS es palabra reservada (SHOW LABELS)
+    tkLabels:
+      begin
+        TokPos := FCurrent.Position;
+        V := GetTokenTextAndNext;
+        if FCurrent.Kind <> tkLParen then
+          raise EGQLParserError.CreateAt(AiFmt('rag.gql.where_expr', [V]), TokPos);
+        Result := ParseFunctionCall(V, TokPos);
       end;
 
     // Literales y parámetros
@@ -1195,24 +1304,113 @@ begin
         ParseLiteralValue(Value);
         Result := TLiteralExpr.Create(Value);
       end;
-
-    // Signo negativo: -5, -$limite, -(a.x)
-    tkDash:
-      begin
-        Next;
-        Operand := ParsePrimary;
-        if (Operand is TLiteralExpr) and VarIsNumeric(TLiteralExpr(Operand).Value) and
-          not VarIsType(TLiteralExpr(Operand).Value, varBoolean) then
-        begin
-          TLiteralExpr(Operand).Value := -TLiteralExpr(Operand).Value;
-          Result := Operand;
-        end
-        else
-          Result := TUnaryExpr.Create(uoNegate, Operand);
-      end;
   else
     raise EGQLParserError.CreateAt(AiFmt('rag.gql.where_expr', [FCurrent.Text]), FCurrent.Position);
   end;
+end;
+
+// Catálogo de funciones: nombre canónico (minúsculas), mínimo y máximo de argumentos,
+// y si el primer argumento debe ser una variable (funciones de grafo).
+type
+  TGQLFunctionInfo = record
+    Name: string;
+    MinArgs, MaxArgs: Integer;
+    NeedsVariable: Boolean;
+  end;
+
+const
+  GQL_FUNCTIONS: array [0 .. 38] of TGQLFunctionInfo = (
+    // Texto
+    (Name: 'lower'; MinArgs: 1; MaxArgs: 1; NeedsVariable: False), (Name: 'upper'; MinArgs: 1; MaxArgs: 1; NeedsVariable: False),
+    (Name: 'trim'; MinArgs: 1; MaxArgs: 1; NeedsVariable: False), (Name: 'ltrim'; MinArgs: 1; MaxArgs: 1; NeedsVariable: False),
+    (Name: 'rtrim'; MinArgs: 1; MaxArgs: 1; NeedsVariable: False), (Name: 'substring'; MinArgs: 2; MaxArgs: 3; NeedsVariable: False),
+    (Name: 'left'; MinArgs: 2; MaxArgs: 2; NeedsVariable: False), (Name: 'right'; MinArgs: 2; MaxArgs: 2; NeedsVariable: False),
+    (Name: 'replace'; MinArgs: 3; MaxArgs: 3; NeedsVariable: False), (Name: 'split'; MinArgs: 2; MaxArgs: 2; NeedsVariable: False),
+    (Name: 'reverse'; MinArgs: 1; MaxArgs: 1; NeedsVariable: False), (Name: 'size'; MinArgs: 1; MaxArgs: 1; NeedsVariable: False),
+    (Name: 'length'; MinArgs: 1; MaxArgs: 1; NeedsVariable: False), (Name: 'tostring'; MinArgs: 1; MaxArgs: 1; NeedsVariable: False),
+    // Números
+    (Name: 'tointeger'; MinArgs: 1; MaxArgs: 1; NeedsVariable: False), (Name: 'tofloat'; MinArgs: 1; MaxArgs: 1; NeedsVariable: False),
+    (Name: 'abs'; MinArgs: 1; MaxArgs: 1; NeedsVariable: False), (Name: 'round'; MinArgs: 1; MaxArgs: 2; NeedsVariable: False),
+    (Name: 'floor'; MinArgs: 1; MaxArgs: 1; NeedsVariable: False), (Name: 'ceil'; MinArgs: 1; MaxArgs: 1; NeedsVariable: False),
+    (Name: 'sqrt'; MinArgs: 1; MaxArgs: 1; NeedsVariable: False), (Name: 'sign'; MinArgs: 1; MaxArgs: 1; NeedsVariable: False),
+    // Nulos
+    (Name: 'coalesce'; MinArgs: 1; MaxArgs: 32; NeedsVariable: False), (Name: 'exists'; MinArgs: 1; MaxArgs: 1; NeedsVariable: False),
+    // Grafo (reciben una variable: id(n), type(r))
+    (Name: 'id'; MinArgs: 1; MaxArgs: 1; NeedsVariable: True), (Name: 'label'; MinArgs: 1; MaxArgs: 1; NeedsVariable: True),
+    (Name: 'labels'; MinArgs: 1; MaxArgs: 1; NeedsVariable: True), (Name: 'type'; MinArgs: 1; MaxArgs: 1; NeedsVariable: True),
+    (Name: 'degree'; MinArgs: 1; MaxArgs: 1; NeedsVariable: True), (Name: 'indegree'; MinArgs: 1; MaxArgs: 1; NeedsVariable: True),
+    (Name: 'outdegree'; MinArgs: 1; MaxArgs: 1; NeedsVariable: True), (Name: 'keys'; MinArgs: 1; MaxArgs: 1; NeedsVariable: True),
+    // Listas
+    (Name: 'head'; MinArgs: 1; MaxArgs: 1; NeedsVariable: False), (Name: 'last'; MinArgs: 1; MaxArgs: 1; NeedsVariable: False),
+    // Fechas
+    (Name: 'date'; MinArgs: 0; MaxArgs: 1; NeedsVariable: False), (Name: 'datetime'; MinArgs: 0; MaxArgs: 1; NeedsVariable: False),
+    (Name: 'year'; MinArgs: 1; MaxArgs: 1; NeedsVariable: False), (Name: 'month'; MinArgs: 1; MaxArgs: 1; NeedsVariable: False),
+    (Name: 'day'; MinArgs: 1; MaxArgs: 1; NeedsVariable: False));
+
+function GQLCanonicalFunction(const AName: string): string;
+begin
+  // Sinónimos de Cypher/SQL
+  Result := LowerCase(AName);
+  if Result = 'tolower' then
+    Result := 'lower'
+  else if Result = 'toupper' then
+    Result := 'upper'
+  else if Result = 'toint' then
+    Result := 'tointeger'
+  else if Result = 'ceiling' then
+    Result := 'ceil';
+end;
+
+function TGraphParser.ParseFunctionCall(const AName: string; APosition: Integer): TGraphExpression;
+var
+  Func: TFunctionExpr;
+  Info: TGQLFunctionInfo;
+  Canon, Range: string;
+  Found: Boolean;
+  I: Integer;
+begin
+  Canon := GQLCanonicalFunction(AName);
+  Found := False;
+  for I := Low(GQL_FUNCTIONS) to High(GQL_FUNCTIONS) do
+    if GQL_FUNCTIONS[I].Name = Canon then
+    begin
+      Info := GQL_FUNCTIONS[I];
+      Found := True;
+      Break;
+    end;
+  if not Found then
+    raise EGQLParserError.CreateAt(AiFmt('rag.gql.unknown_function', [AName, APosition]), APosition);
+
+  Func := TFunctionExpr.Create(Canon);
+  try
+    Expect(tkLParen);
+    if FCurrent.Kind <> tkRParen then
+    begin
+      Func.Args.Add(ParseAdditive);
+      while FCurrent.Kind = tkComma do
+      begin
+        Next;
+        Func.Args.Add(ParseAdditive);
+      end;
+    end;
+    Expect(tkRParen);
+
+    if (Func.Args.Count < Info.MinArgs) or (Func.Args.Count > Info.MaxArgs) then
+    begin
+      if Info.MinArgs = Info.MaxArgs then
+        Range := IntToStr(Info.MinArgs)
+      else
+        Range := IntToStr(Info.MinArgs) + '-' + IntToStr(Info.MaxArgs);
+      raise EGQLParserError.CreateAt(AiFmt('rag.gql.function_args', [AName, Range, Func.Args.Count]), APosition);
+    end;
+
+    if Info.NeedsVariable and not(Func.Args[0] is TVariableExpr) then
+      raise EGQLParserError.CreateAt(AiFmt('rag.gql.function_var', [AName, Canon]), APosition);
+  except
+    Func.Free;
+    raise;
+  end;
+  Result := Func;
 end;
 
 Procedure TGraphParser.ParseReturnClause(AQuery: TGraphMatchQuery);

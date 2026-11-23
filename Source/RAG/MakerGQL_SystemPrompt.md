@@ -4,7 +4,7 @@
 > `TAiRagGraph.ExecuteMakerGQL()`. Derivado del código de
 > `uMakerAi.RAG.Graph.GQL.pas` (lexer/parser) y `uMakerAi.RAG.Graph.Core.pas` (ejecutor).
 > Actualizado a la sintaxis posterior a la v4.0.0 (BETWEEN, STARTS/ENDS WITH, NOT, XOR,
-> parámetros `$x`, negativos, comentarios y patrones separados por coma).
+> parámetros `$x`, negativos, comentarios, patrones separados por coma, funciones y aritmética).
 
 ---
 
@@ -40,13 +40,16 @@ valor  := 'texto' | "texto" | numero | -numero | TRUE | FALSE | NULL | $parametr
 
 expr   := expr OR expr | expr XOR expr | expr AND expr | NOT expr | '(' expr ')' | comparacion
 comparacion := operando OP operando
-             | operando [NOT] IN [ lista ]
+             | operando [NOT] IN ( [ lista ] | $parametro | operando-que-da-lista )
              | operando [NOT] BETWEEN operando AND operando
              | operando [NOT] (LIKE | ILIKE | CONTAINS) operando
              | operando [NOT] STARTS WITH operando
              | operando [NOT] ENDS WITH operando
              | operando IS [NOT] NULL
-operando := var.prop | literal | $parametro | -operando
+operando := termino { ('+' | '-') termino }
+termino  := factor { ('*' | '/' | '%') factor }
+factor   := var.prop | var | funcion '(' [operando {',' operando}] ')' | literal | $parametro
+          | '-' factor | '(' expr ')'
 OP := '=' | '<>' | '>' | '>=' | '<' | '<='
 
 items  := item { ',' item } ;  item := var | var.prop | * | COUNT(x) | SUM(x) | AVG(x) | literal  [AS alias]
@@ -73,24 +76,24 @@ no al final de la consulta.
    No se admiten nombres de propiedad sueltos.
    Por tanto, **cada nodo/arista referenciado en `WHERE` necesita una variable** en el `MATCH`.
    Si la clave tiene espacios, va entre comillas invertidas: ``p.`fecha de compra` ``.
-4. **NO EXISTEN FUNCIONES.** Ningún `nombre(...)` es válido en `WHERE` ni en `RETURN`
-   (salvo `COUNT/SUM/AVG` en `RETURN`, que no calculan nada; ver regla 11).
-   Error típico: *"Se esperaba tkDot y se encontró '('"*. Los paréntesis solo sirven para
-   agrupar expresiones lógicas: `WHERE (a.x = 1 OR a.y = 2) AND b.z > 3`.
-   Equivalencias obligatorias para expresiones tipo Cypher/SQL:
+4. **Solo existen estas funciones** (en `WHERE`; nombres sin distinguir mayúsculas). Cualquier otra
+   da *"función desconocida"*. Un `NULL` en un argumento da `NULL` (salvo `coalesce` y `exists`).
 
-   | Prohibido | Escribe en su lugar |
+   | Grupo | Funciones |
    |---|---|
-   | `EXISTS(n.email)` | `n.email IS NOT NULL` |
-   | `NOT EXISTS(n.email)` | `n.email IS NULL` |
-   | `id(n)` | `n.id` |
-   | `labels(n)` | `n.label` (mejor aún: filtra con `(n:Etiqueta)`) |
-   | `type(r)` | `r.label` (mejor aún: filtra con `-[r:TIPO]->`) |
-   | `toLower(n.name) = 'ana'` / `upper(...)` | `n.name ILIKE 'ana'` |
-   | `n.name =~ 'Ju.*'` (regex) | `n.name STARTS WITH 'Ju'` o `n.name LIKE 'Ju%'` |
-   | `count(...)`, `size(...)`, `length(...)` | sin equivalente: elimina la condición |
-   | `date(n.f)`, `year(n.f)`, `datetime()` | compara texto ISO: `n.fecha >= '2024-01-01'` |
-   | `coalesce(...)`, `toInteger(...)`, `abs(...)` | sin equivalente: elimina la condición |
+   | Texto | `lower(x)` / `toLower`, `upper(x)` / `toUpper`, `trim`, `ltrim`, `rtrim`, `substring(x, inicio[, largo])` (inicio desde **0**), `left(x, n)`, `right(x, n)`, `replace(x, buscar, poner)`, `split(x, separador)` → lista, `reverse(x)`, `size(x)` / `length(x)` (largo del texto o de la lista), `toString(x)` |
+   | Números | `toInteger(x)`, `toFloat(x)`, `abs`, `round(x[, decimales])`, `floor`, `ceil`, `sqrt`, `sign` |
+   | Nulos | `coalesce(a, b, ...)` (el primero no nulo), `exists(n.prop)` (= `IS NOT NULL`) |
+   | Grafo (reciben la **variable**, no una propiedad) | `id(n)`, `label(n)`, `labels(n)` → lista, `type(r)`, `degree(n)`, `inDegree(n)`, `outDegree(n)`, `keys(n)` → lista de claves |
+   | Listas | `head(lista)`, `last(lista)`; `x IN lista` (`'Persona' IN labels(n)`, `'rojo' IN split(n.colores, ',')`) |
+   | Fechas | `date()`, `date('2026-11-23')`, `datetime()`, `datetime(x)`, `year(x)`, `month(x)`, `day(x)` (aceptan fecha o texto ISO) |
+
+   **Aritmética:** `+ - * / %` con la precedencia habitual y paréntesis: `WHERE p.precio * 1.19 > 50000`.
+   `+` suma si ambos lados son números (aunque estén guardados como texto) y si no **concatena**:
+   `n.nombre + ' ' + n.apellido`. Dividir por cero da `NULL`.
+
+   **No existen:** `count(...)` en `WHERE`, `startNode/endNode`, `properties(n)`, expresiones regulares (`=~`),
+   `CASE`, `duration`, `rand()`. Para regex usa `STARTS WITH`, `ENDS WITH`, `CONTAINS` o `LIKE`.
 5. **Listas `IN` / `NOT IN` usan corchetes**, no paréntesis: `p.ciudad IN ['Madrid','Bogotá']`.
    Solo admiten literales (texto, número, booleano, NULL) o un `$parametro`.
 6. **`BETWEEN` incluye los extremos** y su `AND` es parte del operador:
@@ -103,7 +106,8 @@ no al final de la consulta.
 10. **Palabras reservadas** (no las uses como variable, etiqueta, tipo de arista o clave dentro de `{}`):
     `MATCH, WHERE, RETURN, AND, OR, NOT, TRUE, FALSE, NULL, SHOW, LABELS, EDGES, CONTAINS,
     LIKE, ILIKE, IN, IS, SUM, AVG, COUNT, DEPTH, SHORTEST, PATH, TO, GET, CENTRALITY, DEGREES, TOP`.
-    Después del punto sí se aceptan (`n.count`), y `BETWEEN`, `XOR`, `STARTS`, `ENDS`, `WITH` no son reservadas.
+    Después del punto sí se aceptan (`n.count`), `labels(n)` funciona como función,
+    y `BETWEEN`, `XOR`, `STARTS`, `ENDS`, `WITH` no son reservadas.
 11. **`RETURN` es opcional y decorativo**: se valida sintácticamente pero no altera el resultado
     (siempre se devuelve el subgrafo coincidente). `COUNT/SUM/AVG` se parsean pero **no calculan nada**.
     Prefiere omitir `RETURN` o mantenerlo simple.
@@ -203,6 +207,16 @@ WHERE r.weight >= 0.7 AND q.saldo > -100
 ```
 
 ```gql
+MATCH (c:Producto)-[:TIENE_ACIDEZ]->(a:Acidez)
+WHERE lower(a.name) = 'baja' AND c.precio * 1.19 <= 30000 AND degree(c) >= 2
+```
+
+```gql
+MATCH (p:Persona)
+WHERE coalesce(p.apodo, p.name) STARTS WITH 'Gus' AND year(p.fecha_ingreso) >= 2024
+```
+
+```gql
 SHOW LABELS
 ```
 
@@ -217,9 +231,10 @@ SHORTEST PATH (:Persona {name:'Steve Jobs'}) TO (:Ciudad {name:'Cupertino'})
 | `MATCH (a)-->(b)` | `MATCH (a)-[]->(b)` |
 | `... RETURN p DEPTH 2` | `... DEPTH 2 ... RETURN p` |
 | `WHERE ciudad = 'Madrid'` | `WHERE p.ciudad = 'Madrid'` |
-| `WHERE EXISTS(p.email)` | `WHERE p.email IS NOT NULL` |
-| `WHERE toLower(p.name) = 'ana'` | `WHERE p.name ILIKE 'ana'` |
-| `WHERE type(r) = 'CONOCE'` | `MATCH (a)-[r:CONOCE]->(b)` |
+| `WHERE id(n.name) = 'x'` | `WHERE id(n) = 'x'` (las funciones de grafo reciben la variable) |
+| `WHERE type(r) = 'CONOCE'` (sin necesidad) | `MATCH (a)-[r:CONOCE]->(b)` (filtra antes, más rápido) |
+| `WHERE n.name =~ 'Ana.*'` | `WHERE n.name STARTS WITH 'Ana'` |
+| `WHERE substring(n.name, 1, 3) = 'Ana'` | `substring` empieza en 0: `substring(n.name, 0, 3)` |
 | `WHERE p.ciudad IN ('A','B')` | `WHERE p.ciudad IN ['A','B']` |
 | `WHERE p.edad >= 18 AND <= 30` | `WHERE p.edad BETWEEN 18 AND 30` |
 | `MATCH (p) LIMIT 10` | `GET DEGREES TOP 10` u omitir el límite |

@@ -55,7 +55,7 @@ type
   // --------- CLASES PARA EL PARSER --------------------------------
 
   { Enumeraciones para el �rbol de Expresiones }
-  TExpressionKind = (ekLiteral, ekProperty, ekBinary, ekUnary, ekBetween);
+  TExpressionKind = (ekLiteral, ekProperty, ekBinary, ekUnary, ekBetween, ekVariable, ekFunction);
 
   TBinaryOp = (
     // L�gicos
@@ -75,7 +75,10 @@ type
     opIsNotNull, // Nuevo
 
     // v4.1: XOR y prefijo/sufijo de texto (sin distinguir mayúsculas, como CONTAINS)
-    opXor, opStartsWith, opEndsWith
+    opXor, opStartsWith, opEndsWith,
+
+    // Aritmética. + suma si ambos lados son números (aunque vengan como texto); si no, concatena
+    opAdd, opSub, opMul, opDiv, opMod
     );
 
   TUnaryOp = (uoNot, uoNegate);
@@ -118,6 +121,22 @@ type
     Op: TUnaryOp;
     Operand: TGraphExpression;
     constructor Create(AOp: TUnaryOp; AOperand: TGraphExpression);
+    destructor Destroy; override;
+  end;
+
+  { Variable suelta (n, r): argumento de id(n), type(r), degree(n)... }
+  TVariableExpr = class(TGraphExpression)
+  public
+    Variable: string;
+    constructor Create(const AVar: string);
+  end;
+
+  { Llamada a función: lower(n.name), coalesce(a, b). Name va en minúsculas (nombre canónico). }
+  TFunctionExpr = class(TGraphExpression)
+  public
+    Name: string;
+    Args: TObjectList<TGraphExpression>; // Es dueña de los argumentos
+    constructor Create(const AName: string);
     destructor Destroy; override;
   end;
 
@@ -406,6 +425,7 @@ type
     function InternalAddEdge(AEdge: TAiRagGraphEdge; AShouldPersist: Boolean): TAiRagGraphEdge;
     procedure Notification(AComponent: TComponent; Operation: TOperation); override;
     function EvaluateGraphExpression(AExpr: TGraphExpression; ABoundElements: TDictionary<string, TObject>): Variant;
+    function EvaluateGQLFunction(AFunc: TFunctionExpr; ABoundElements: TDictionary<string, TObject>): Variant;
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
@@ -1191,6 +1211,267 @@ begin
     Result := GQLEquals(Val, List);
 end;
 
+// Texto de un valor sin depender del idioma: números con punto, fechas ISO, booleanos true/false
+function GQLToText(const V: Variant): string;
+var
+  Dt: TDateTime;
+begin
+  if GQLIsNull(V) then
+    Exit('');
+  if VarIsType(V, varBoolean) then
+    Exit(GQLBoolText(V));
+  if VarIsType(V, varDate) then
+  begin
+    Dt := VarToDateTime(V);
+    if Frac(Dt) = 0 then
+      Exit(FormatDateTime('yyyy-mm-dd', Dt, TFormatSettings.Invariant))
+    else
+      Exit(FormatDateTime('yyyy-mm-dd"T"hh:nn:ss', Dt, TFormatSettings.Invariant));
+  end;
+  if VarIsNumeric(V) then
+    Exit(FloatToStr(Double(V), TFormatSettings.Invariant));
+  Result := VarToStr(V);
+end;
+
+function GQLStringsToVarArray(const AItems: TArray<string>): Variant;
+var
+  I: Integer;
+begin
+  Result := VarArrayCreate([0, Length(AItems) - 1], varVariant);
+  for I := 0 to High(AItems) do
+    Result[I] := AItems[I];
+end;
+
+function TAiRagGraph.EvaluateGQLFunction(AFunc: TFunctionExpr; ABoundElements: TDictionary<string, TObject>): Variant;
+var
+  N, S: string;
+  A: TArray<Variant>;
+  Obj: TObject;
+  Node: TAiRagGraphNode;
+  Edge: TAiRagGraphEdge;
+  D, F: Double;
+  I, Start, Len, Decimals: Integer;
+  Dt: TDateTime;
+
+  function ArgInt(AIndex: Integer; out AValue: Integer): Boolean;
+  var
+    X: Double;
+  begin
+    Result := GQLTryNumber(A[AIndex], X);
+    if Result then
+      AValue := Trunc(X);
+  end;
+
+begin
+  Result := Null;
+  N := AFunc.Name;
+
+  // --- Funciones de grafo: trabajan sobre el elemento enlazado a la variable ---
+  if (N = 'id') or (N = 'label') or (N = 'labels') or (N = 'type') or (N = 'degree') or (N = 'indegree') or
+    (N = 'outdegree') or (N = 'keys') then
+  begin
+    Obj := nil;
+    if (AFunc.Args.Count > 0) and (AFunc.Args[0] is TVariableExpr) then
+      ABoundElements.TryGetValue(TVariableExpr(AFunc.Args[0]).Variable, Obj);
+
+    if Obj is TAiRagGraphNode then
+    begin
+      Node := TAiRagGraphNode(Obj);
+      if N = 'id' then
+        Result := Node.ID
+      else if N = 'label' then
+        Result := Node.NodeLabel
+      else if N = 'labels' then
+        Result := GQLStringsToVarArray([Node.NodeLabel])
+      else if N = 'degree' then
+        Result := Node.IncomingEdges.Count + Node.OutgoingEdges.Count
+      else if N = 'indegree' then
+        Result := Node.IncomingEdges.Count
+      else if N = 'outdegree' then
+        Result := Node.OutgoingEdges.Count
+      else if N = 'keys' then
+        Result := GQLStringsToVarArray(Node.MetaData.InternalDictionary.Keys.ToArray);
+    end
+    else if Obj is TAiRagGraphEdge then
+    begin
+      Edge := TAiRagGraphEdge(Obj);
+      if N = 'id' then
+        Result := Edge.ID
+      else if (N = 'label') or (N = 'type') then
+        Result := Edge.EdgeLabel
+      else if N = 'keys' then
+        Result := GQLStringsToVarArray(Edge.MetaData.InternalDictionary.Keys.ToArray);
+    end;
+    Exit;
+  end;
+
+  // --- El resto recibe valores ---
+  SetLength(A, AFunc.Args.Count);
+  for I := 0 to AFunc.Args.Count - 1 do
+    A[I] := EvaluateGraphExpression(AFunc.Args[I], ABoundElements);
+
+  if N = 'coalesce' then
+  begin
+    for I := 0 to High(A) do
+      if not GQLIsNull(A[I]) then
+        Exit(A[I]);
+    Exit;
+  end;
+  if N = 'exists' then
+    Exit(not GQLIsNull(A[0]));
+
+  // Fechas sin argumento
+  if (Length(A) = 0) and (N = 'date') then
+    Exit(VarFromDateTime(Date));
+  if (Length(A) = 0) and (N = 'datetime') then
+    Exit(VarFromDateTime(Now));
+
+  // Un NULL en cualquier argumento da NULL
+  for I := 0 to High(A) do
+    if GQLIsNull(A[I]) then
+      Exit;
+
+  // --- Texto ---
+  if N = 'lower' then
+    Result := AnsiLowerCase(GQLToText(A[0]))
+  else if N = 'upper' then
+    Result := AnsiUpperCase(GQLToText(A[0]))
+  else if N = 'trim' then
+    Result := Trim(GQLToText(A[0]))
+  else if N = 'ltrim' then
+    Result := TrimLeft(GQLToText(A[0]))
+  else if N = 'rtrim' then
+    Result := TrimRight(GQLToText(A[0]))
+  else if N = 'substring' then
+  begin
+    // Como en Cypher: inicio desde 0
+    S := GQLToText(A[0]);
+    if not ArgInt(1, Start) or (Start < 0) then
+      Exit;
+    if Start > Length(S) then
+      Exit('');
+    Len := Length(S) - Start;
+    if (Length(A) > 2) and (not ArgInt(2, Len) or (Len < 0)) then
+      Exit;
+    Result := S.Substring(Start, Len);
+  end
+  else if (N = 'left') or (N = 'right') then
+  begin
+    S := GQLToText(A[0]);
+    if not ArgInt(1, Len) or (Len < 0) then
+      Exit;
+    if N = 'left' then
+      Result := Copy(S, 1, Len)
+    else if Len >= Length(S) then
+      Result := S
+    else
+      Result := Copy(S, Length(S) - Len + 1, Len);
+  end
+  else if N = 'replace' then
+    Result := StringReplace(GQLToText(A[0]), GQLToText(A[1]), GQLToText(A[2]), [rfReplaceAll])
+  else if N = 'split' then
+    Result := GQLStringsToVarArray(GQLToText(A[0]).Split([GQLToText(A[1])]))
+  else if N = 'reverse' then
+    Result := ReverseString(GQLToText(A[0]))
+  else if (N = 'size') or (N = 'length') then
+  begin
+    if VarIsArray(A[0]) then
+      Result := VarArrayHighBound(A[0], 1) - VarArrayLowBound(A[0], 1) + 1
+    else
+      Result := Length(GQLToText(A[0]));
+  end
+  else if N = 'tostring' then
+    Result := GQLToText(A[0])
+
+  // --- Listas ---
+  else if (N = 'head') or (N = 'last') then
+  begin
+    if VarIsArray(A[0]) and (VarArrayHighBound(A[0], 1) >= VarArrayLowBound(A[0], 1)) then
+    begin
+      if N = 'head' then
+        Result := A[0][VarArrayLowBound(A[0], 1)]
+      else
+        Result := A[0][VarArrayHighBound(A[0], 1)];
+    end;
+  end
+
+  // --- Fechas: aceptan una fecha o texto ISO 8601 ---
+  else if (N = 'date') or (N = 'datetime') or (N = 'year') or (N = 'month') or (N = 'day') then
+  begin
+    if not GQLTryDate(A[0], Dt) then
+      Exit;
+    if N = 'date' then
+      Result := VarFromDateTime(DateOf(Dt))
+    else if N = 'datetime' then
+      Result := VarFromDateTime(Dt)
+    else if N = 'year' then
+      Result := YearOf(Dt)
+    else if N = 'month' then
+      Result := MonthOf(Dt)
+    else
+      Result := DayOf(Dt);
+  end
+
+  // --- Números ---
+  else
+  begin
+    if not GQLTryNumber(A[0], D) then
+      Exit;
+    if N = 'tointeger' then
+      Result := Int64(Trunc(D))
+    else if N = 'tofloat' then
+      Result := D
+    else if N = 'abs' then
+      Result := Abs(D)
+    else if N = 'round' then
+    begin
+      // Mitades hacia afuera (2.5 -> 3, -2.5 -> -3), no el redondeo bancario de Round()
+      Decimals := 0;
+      if (Length(A) > 1) and not ArgInt(1, Decimals) then
+        Exit;
+      if Decimals < 0 then
+        Decimals := 0
+      else if Decimals > 10 then
+        Decimals := 10;
+      F := 1;
+      for I := 1 to Decimals do
+        F := F * 10;
+      if D < 0 then
+        Result := -Int(-D * F + 0.5) / F
+      else
+        Result := Int(D * F + 0.5) / F;
+    end
+    else if N = 'floor' then
+    begin
+      if (D < 0) and (Frac(D) <> 0) then
+        Result := Int(D) - 1
+      else
+        Result := Int(D);
+    end
+    else if N = 'ceil' then
+    begin
+      if (D > 0) and (Frac(D) <> 0) then
+        Result := Int(D) + 1
+      else
+        Result := Int(D);
+    end
+    else if N = 'sqrt' then
+    begin
+      if D >= 0 then
+        Result := Sqrt(D);
+    end
+    else if N = 'sign' then
+    begin
+      if D > 0 then
+        Result := 1
+      else if D < 0 then
+        Result := -1
+      else
+        Result := 0;
+    end;
+  end;
+end;
+
 function TAiRagGraph.EvaluateGraphExpression(AExpr: TGraphExpression; ABoundElements: TDictionary<string, TObject>): Variant;
 var
   Left, Right, Lo, Hi: Variant;
@@ -1202,7 +1483,7 @@ var
   Btw: TBetweenExpr;
   P: TPropertyExpr;
   Cmp, CmpLo, CmpHi: Integer;
-  D: Double;
+  D, DL, DR: Double;
 begin
   if AExpr = nil then
     Exit(True);
@@ -1253,6 +1534,27 @@ begin
           end;
         end;
       end;
+
+    // ================================================================
+    // VARIABLE suelta: el ID del elemento (NULL si no está enlazada)
+    // ================================================================
+    ekVariable:
+      begin
+        Result := Null;
+        if ABoundElements.TryGetValue(TVariableExpr(AExpr).Variable, Obj) then
+        begin
+          if Obj is TAiRagGraphNode then
+            Result := TAiRagGraphNode(Obj).ID
+          else if Obj is TAiRagGraphEdge then
+            Result := TAiRagGraphEdge(Obj).ID;
+        end;
+      end;
+
+    // ================================================================
+    // FUNCIÓN
+    // ================================================================
+    ekFunction:
+      Result := EvaluateGQLFunction(TFunctionExpr(AExpr), ABoundElements);
 
     // ================================================================
     // UNARY: NOT, signo negativo
@@ -1309,6 +1611,35 @@ begin
           // --- LOGICAL ---
           opXor:
             Result := GQLToBool(Left) xor GQLToBool(Right);
+
+          // --- ARITMÉTICA (un NULL da NULL; división por cero, NULL) ---
+          opAdd:
+            if GQLIsNull(Left) or GQLIsNull(Right) then
+              Result := Null
+            else if GQLTryNumber(Left, DL) and GQLTryNumber(Right, DR) then
+              Result := DL + DR
+            else
+              Result := GQLToText(Left) + GQLToText(Right); // Concatenación
+          opSub, opMul, opDiv, opMod:
+            if not(GQLTryNumber(Left, DL) and GQLTryNumber(Right, DR)) then
+              Result := Null
+            else
+              case B.Op of
+                opSub:
+                  Result := DL - DR;
+                opMul:
+                  Result := DL * DR;
+                opDiv:
+                  if DR = 0 then
+                    Result := Null
+                  else
+                    Result := DL / DR;
+              else
+                if DR = 0 then
+                  Result := Null
+                else
+                  Result := DL - DR * Int(DL / DR); // Resto con el signo del dividendo
+              end;
 
           // --- COMPARISON ---
           opEqual:
@@ -5023,6 +5354,29 @@ end;
 destructor TUnaryExpr.Destroy;
 begin
   Operand.Free;
+  inherited;
+end;
+
+{ TVariableExpr }
+constructor TVariableExpr.Create(const AVar: string);
+begin
+  inherited Create;
+  Kind := ekVariable;
+  Variable := AVar;
+end;
+
+{ TFunctionExpr }
+constructor TFunctionExpr.Create(const AName: string);
+begin
+  inherited Create;
+  Kind := ekFunction;
+  Name := AName;
+  Args := TObjectList<TGraphExpression>.Create(True);
+end;
+
+destructor TFunctionExpr.Destroy;
+begin
+  Args.Free;
   inherited;
 end;
 
