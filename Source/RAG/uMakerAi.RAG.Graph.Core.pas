@@ -55,7 +55,7 @@ type
   // --------- CLASES PARA EL PARSER --------------------------------
 
   { Enumeraciones para el �rbol de Expresiones }
-  TExpressionKind = (ekLiteral, ekProperty, ekBinary, ekUnary, ekBetween, ekVariable, ekFunction, ekAggregate, ekPattern);
+  TExpressionKind = (ekLiteral, ekProperty, ekBinary, ekUnary, ekBetween, ekVariable, ekFunction, ekAggregate, ekPattern, ekSimilar);
 
   TBinaryOp = (
     // L�gicos
@@ -136,6 +136,8 @@ type
   public
     Name: string;
     Args: TObjectList<TGraphExpression>; // Es dueña de los argumentos
+    EmbedText: string; // similarity(n, 'texto'): embedding del texto ya calculado
+    EmbedCache: TAiEmbeddingData;
     constructor Create(const AName: string);
     destructor Destroy; override;
   end;
@@ -155,6 +157,20 @@ type
   end;
 
   TGraphMatchQuery = class;
+
+  // n SIMILAR TO 'texto' [> umbral | >= umbral]: similitud coseno entre el embedding del nodo
+  // (o arista) y el del texto. Sin umbral: >= 0.5. El embedding del texto se calcula una vez.
+  TSimilarExpr = class(TGraphExpression)
+  public
+    Target: TGraphExpression; // TVariableExpr
+    Text: TGraphExpression;
+    Threshold: TGraphExpression; // nil = 0.5
+    StrictGreater: Boolean; // > en vez de >=
+    CacheText: string;
+    Cache: TAiEmbeddingData;
+    constructor Create(ATarget, AText, AThreshold: TGraphExpression; AStrict: Boolean);
+    destructor Destroy; override;
+  end;
 
   // Patrón como condición: WHERE (p)-[:COMPRO]->(:Cafe), exists(...), EXISTS { MATCH ... WHERE ... }.
   // Vale True si el patrón tiene al menos una coincidencia con las variables ya enlazadas.
@@ -536,6 +552,8 @@ type
     function EvaluateGQLFunction(AFunc: TFunctionExpr; ABoundElements: TDictionary<string, TObject>): Variant;
     function RunGQLProjection(AStage: TGQLProjection; const AInput: TArray<TDictionary<string, TObject>>): TArray<TDictionary<string, TObject>>;
     function GQLCandidates(APattern: TMatchNodePattern): TArray<TAiRagGraphNode>;
+    function GQLSimilarity(AObj: TObject; const AText: string; var ACacheText: string; var ACache: TAiEmbeddingData): Variant;
+    function GQLExplain(AQuery: TGraphMatchQuery; const ACommand: string): string;
     procedure GQLSolve(AQuery: TGraphMatchQuery; AClauses: TList<TMatchClause>; APatterns: TList<TMatchNodePattern>;
       AWhere: TGraphExpression; AState: TDictionary<string, TObject>; AResults: TObjectList<TDictionary<string, TObject>>;
       AFirstOnly: Boolean);
@@ -1407,6 +1425,280 @@ begin
       Obj.Free;
 end;
 
+procedure GQLBump(ADict: TDictionary<string, Integer>; const AKey: string);
+var
+  C: Integer;
+begin
+  if not ADict.TryGetValue(AKey, C) then
+    C := 0;
+  ADict.AddOrSetValue(AKey, C + 1);
+end;
+
+// ---------------------------------------------------------------------------
+// MakerGQL: similitud semántica y EXPLAIN
+// ---------------------------------------------------------------------------
+
+// Coseno entre el embedding del nodo/arista y el del texto. El embedding del texto se calcula
+// una vez por expresión (ACache). NULL si el elemento no tiene vector o los tamaños no casan.
+function TAiRagGraph.GQLSimilarity(AObj: TObject; const AText: string; var ACacheText: string; var ACache: TAiEmbeddingData): Variant;
+var
+  V: TAiEmbeddingData;
+  I: Integer;
+  Dot, NA, NB: Double;
+begin
+  Result := Null;
+  if not(AObj is TAiEmbeddingNode) then
+    Exit;
+  if FEmbeddings = nil then
+    raise Exception.Create(AiStr('rag.gql.no_embeddings'));
+  if (Length(ACache) = 0) or (ACacheText <> AText) then
+  begin
+    ACache := FEmbeddings.CreateEmbedding(AText, 'user');
+    ACacheText := AText;
+  end;
+  V := TAiEmbeddingNode(AObj).Data;
+  if (Length(V) = 0) or (Length(V) <> Length(ACache)) then
+    Exit;
+  Dot := 0;
+  NA := 0;
+  NB := 0;
+  for I := 0 to High(V) do
+  begin
+    Dot := Dot + V[I] * ACache[I];
+    NA := NA + V[I] * V[I];
+    NB := NB + ACache[I] * ACache[I];
+  end;
+  if (NA = 0) or (NB = 0) then
+    Exit; // Nodo sin embedding (vector en ceros)
+  Result := Dot / (Sqrt(NA) * Sqrt(NB));
+end;
+
+function GQLNodePatternText(P: TMatchNodePattern): string;
+var
+  Pair: TPair<string, Variant>;
+  Props: string;
+begin
+  Result := '(';
+  if not P.Variable.StartsWith('#') then
+    Result := Result + P.Variable;
+  if P.NodeLabel <> '' then
+    Result := Result + ':' + P.NodeLabel;
+  Props := '';
+  for Pair in P.Properties do
+  begin
+    if Props <> '' then
+      Props := Props + ', ';
+    Props := Props + Pair.Key + ': ' + GQLToText(Pair.Value);
+  end;
+  if Props <> '' then
+    Result := Result + ' {' + Props + '}';
+  Result := Result + ')';
+end;
+
+function GQLEdgePatternText(E: TMatchEdgePattern): string;
+var
+  Inner: string;
+begin
+  Inner := E.Variable;
+  if E.EdgeLabel <> '' then
+    Inner := Inner + ':' + E.EdgeLabel;
+  if E.IsVariableLength then
+  begin
+    Inner := Inner + '*' + IntToStr(E.MinHops) + '..';
+    if E.MaxHops >= 0 then
+      Inner := Inner + IntToStr(E.MaxHops);
+  end;
+  case E.Direction of
+    gdOutgoing:
+      Result := '-[' + Inner + ']->';
+    gdIncoming:
+      Result := '<-[' + Inner + ']-';
+  else
+    Result := '-[' + Inner + ']-';
+  end;
+end;
+
+// Describe cómo se va a ejecutar la consulta, sin ejecutarla
+function TAiRagGraph.GQLExplain(AQuery: TGraphMatchQuery; const ACommand: string): string;
+var
+  SB: TStringBuilder;
+  Bound: TList<string>;
+  Step, I: Integer;
+  Stage: TGQLProjection;
+  Part: TGQLOptionalMatch;
+  Def: TGQLPathDef;
+  Names: string;
+  P: TMatchNodePattern;
+
+  function Plural(N: Integer; const ASingular, APlural: string): string;
+  begin
+    if N = 1 then
+      Result := '1 ' + ASingular
+    else
+      Result := IntToStr(N) + ' ' + APlural;
+  end;
+
+  function VarName(const AVar: string): string;
+  begin
+    if AVar.StartsWith('#') then
+      Result := 'an anonymous node'
+    else
+      Result := AVar;
+  end;
+
+  function Candidates(const AVar: string): string;
+  var
+    Pat: TMatchNodePattern;
+  begin
+    Pat := AQuery.NodePatternByVariable[AVar];
+    if Pat = nil then
+      Exit('?');
+    if Pat.NodeLabel = '' then
+      Result := Plural(Length(GQLCandidates(Pat)), 'node', 'nodes') + ' (no label: every node is scanned)'
+    else
+      Result := Plural(Length(GQLCandidates(Pat)), 'candidate', 'candidates') + ' by label';
+  end;
+
+  procedure ExplainClauses(AClauses: TList<TMatchClause>; APatterns: TList<TMatchNodePattern>; const AIndent: string);
+  var
+    C: TMatchClause;
+    Hops: string;
+    Pat: TMatchNodePattern;
+  begin
+    for C in AClauses do
+    begin
+      if not Bound.Contains(C.SourceNodeVar) and not Bound.Contains(C.TargetNodeVar) then
+      begin
+        Inc(Step);
+        SB.AppendFormat('%s%d. Anchor %s: %s', [AIndent, Step, GQLNodePatternText(AQuery.NodePatternByVariable[C.SourceNodeVar]),
+          Candidates(C.SourceNodeVar)]).AppendLine;
+        Bound.Add(C.SourceNodeVar);
+      end;
+      if C.EdgePattern.IsVariableLength then
+      begin
+        if C.EdgePattern.MaxHops >= 0 then
+          Hops := Format('%d..%d hops', [C.EdgePattern.MinHops, C.EdgePattern.MaxHops])
+        else
+          Hops := Format('%d..10 hops (no maximum given: capped at 10)', [C.EdgePattern.MinHops]);
+      end
+      else
+        Hops := '1 hop';
+      Inc(Step);
+      if Bound.Contains(C.SourceNodeVar) then
+        SB.AppendFormat('%s%d. Expand from %s: %s%s%s, %s', [AIndent, Step, VarName(C.SourceNodeVar),
+          GQLNodePatternText(AQuery.NodePatternByVariable[C.SourceNodeVar]), GQLEdgePatternText(C.EdgePattern),
+          GQLNodePatternText(AQuery.NodePatternByVariable[C.TargetNodeVar]), Hops]).AppendLine
+      else
+        SB.AppendFormat('%s%d. Expand backwards from %s (already bound): %s%s%s, %s', [AIndent, Step, VarName(C.TargetNodeVar),
+          GQLNodePatternText(AQuery.NodePatternByVariable[C.SourceNodeVar]), GQLEdgePatternText(C.EdgePattern),
+          GQLNodePatternText(AQuery.NodePatternByVariable[C.TargetNodeVar]), Hops]).AppendLine;
+      if not Bound.Contains(C.SourceNodeVar) then
+        Bound.Add(C.SourceNodeVar);
+      if not Bound.Contains(C.TargetNodeVar) then
+        Bound.Add(C.TargetNodeVar);
+    end;
+    for Pat in APatterns do
+      if not Bound.Contains(Pat.Variable) then
+      begin
+        Inc(Step);
+        SB.AppendFormat('%s%d. Combine every %s with each row (cartesian product): %s', [AIndent, Step, GQLNodePatternText(Pat),
+          Candidates(Pat.Variable)]).AppendLine;
+        Bound.Add(Pat.Variable);
+      end;
+  end;
+
+  procedure ExplainStage(AStage: TGQLProjection; const ATitle: string);
+  var
+    It: TGQLReturnItem;
+  begin
+    Names := '';
+    for It in AStage.Items do
+    begin
+      if Names <> '' then
+        Names := Names + ', ';
+      Names := Names + It.Name;
+    end;
+    SB.Append(ATitle).Append(': ');
+    if AStage.Distinct then
+      SB.Append('DISTINCT ');
+    SB.Append(Names);
+    if AStage.Where <> nil then
+      SB.Append('; WHERE on the columns');
+    if AStage.OrderBy.Count > 0 then
+      SB.Append('; ORDER BY ').Append(AStage.OrderBy.Count).Append(' key(s)');
+    if AStage.Skip >= 0 then
+      SB.Append('; SKIP ').Append(AStage.Skip);
+    if AStage.Limit >= 0 then
+      SB.Append('; LIMIT ').Append(AStage.Limit);
+    SB.AppendLine;
+  end;
+
+begin
+  SB := TStringBuilder.Create;
+  Bound := TList<string>.Create;
+  try
+    SB.AppendLine('### QUERY PLAN ###');
+    if ACommand <> '' then
+    begin
+      SB.Append('Command ').Append(ACommand).AppendLine(': runs a graph algorithm or lists the schema; no pattern matching.');
+      Exit(SB.ToString);
+    end;
+
+    if AQuery.Tabular then
+      SB.Append('Result: a table with ').Append(Plural(AQuery.Projections.Last.Items.Count, 'column', 'columns')).AppendLine
+    else
+      SB.AppendLine('Result: the matched subgraph as context text');
+
+    Step := 0;
+    SB.AppendLine('MATCH:');
+    var Main := TList<TMatchNodePattern>.Create;
+    try
+      for P in AQuery.NodePatterns do
+        if not P.Optional then
+          Main.Add(P);
+      ExplainClauses(AQuery.MatchClauses, Main, '  ');
+    finally
+      Main.Free;
+    end;
+    for Def in AQuery.Paths do
+      SB.AppendFormat('  Path variable %s', [Def.Variable]).AppendLine;
+    if AQuery.WhereClause <> nil then
+      SB.AppendLine('WHERE: filters each complete match');
+
+    I := 0;
+    for Part in AQuery.OptionalParts do
+    begin
+      Inc(I);
+      SB.AppendFormat('OPTIONAL MATCH %d (rows without a match are kept, new variables NULL):', [I]).AppendLine;
+      ExplainClauses(Part.Clauses, Part.Patterns, '  ');
+      if Part.Where <> nil then
+        SB.AppendLine('  WHERE: filters the optional part only');
+    end;
+
+    if AQuery.Depth > 0 then
+    begin
+      if AQuery.Tabular then
+        SB.AppendFormat('DEPTH %d: ignored (the result is a table)', [AQuery.Depth]).AppendLine
+      else
+        SB.AppendFormat('DEPTH %d: adds the neighbourhood of the matched nodes', [AQuery.Depth]).AppendLine;
+    end;
+
+    I := 0;
+    for Stage in AQuery.Projections do
+    begin
+      Inc(I);
+      if Stage.IsReturn then
+        ExplainStage(Stage, 'RETURN')
+      else
+        ExplainStage(Stage, 'WITH ' + IntToStr(I));
+    end;
+    Result := SB.ToString;
+  finally
+    Bound.Free;
+    SB.Free;
+  end;
+end;
+
 // Clave de un valor para agrupar y para DISTINCT (3 y 3.0 son el mismo número)
 function GQLValueKey(const V: Variant): string;
 var
@@ -1935,11 +2227,15 @@ begin
 
   // --- Funciones de grafo: trabajan sobre el elemento enlazado a la variable ---
   if (N = 'id') or (N = 'label') or (N = 'labels') or (N = 'type') or (N = 'degree') or (N = 'indegree') or
-    (N = 'outdegree') or (N = 'keys') or (N = 'nodes') or (N = 'relationships') then
+    (N = 'outdegree') or (N = 'keys') or (N = 'nodes') or (N = 'relationships') or (N = 'similarity') then
   begin
     Obj := nil;
     if (AFunc.Args.Count > 0) and (AFunc.Args[0] is TVariableExpr) then
       ABoundElements.TryGetValue(TVariableExpr(AFunc.Args[0]).Variable, Obj);
+
+    // similarity(n, 'texto'): coseno entre embeddings (nodo o arista)
+    if N = 'similarity' then
+      Exit(GQLSimilarity(Obj, GQLToText(EvaluateGraphExpression(AFunc.Args[1], ABoundElements)), AFunc.EmbedText, AFunc.EmbedCache));
 
     if Obj is TAiRagGraphNode then
     begin
@@ -2157,6 +2453,7 @@ var
   D, DL, DR: Double;
   PatRes: TObjectList<TDictionary<string, TObject>>;
   PatRow: TDictionary<string, TObject>;
+  Sim: TSimilarExpr;
 begin
   if AExpr = nil then
     Exit(True);
@@ -2230,6 +2527,30 @@ begin
     // ================================================================
     ekAggregate:
       Result := TAggregateExpr(AExpr).Value;
+
+    // ================================================================
+    // SIMILAR TO: similitud de embeddings contra un umbral
+    // ================================================================
+    ekSimilar:
+      begin
+        Sim := TSimilarExpr(AExpr);
+        Result := False;
+        if ABoundElements.TryGetValue(TVariableExpr(Sim.Target).Variable, Obj) then
+        begin
+          Left := GQLSimilarity(Obj, GQLToText(EvaluateGraphExpression(Sim.Text, ABoundElements)), Sim.CacheText, Sim.Cache);
+          if not GQLIsNull(Left) then
+          begin
+            DR := 0.5;
+            if Assigned(Sim.Threshold) and not GQLTryNumber(EvaluateGraphExpression(Sim.Threshold, ABoundElements), DR) then
+              Exit(False);
+            DL := Left;
+            if Sim.StrictGreater then
+              Result := DL > DR
+            else
+              Result := DL >= DR;
+          end;
+        end;
+      end;
 
     // ================================================================
     // PATRÓN como condición: ¿hay al menos una coincidencia?
@@ -2541,7 +2862,7 @@ end;
   // Tipo especial para que el visualizador sepa mostrarlo
   ResDict.Add('type', TStringWrapper.Create('centrality_score'));
   ResDict.Add('node', TStringWrapper.Create(StartNode.Name));
-  ResDict.Add('value', TStringWrapper.Create(FormatFloat('0.####', Score)));
+  ResDict.Add('value', TStringWrapper.Create(FormatFloat('0.####', Score, TFormatSettings.Invariant)));
 
   Result[0] := ResDict;
   end;
@@ -2695,6 +3016,41 @@ var
   Rows, NextRows: TArray<TDictionary<string, TObject>>;
   Stage: TGQLProjection;
 
+  // Comandos de esquema y algoritmos
+  Node: TAiRagGraphNode;
+  Edge: TAiRagGraphEdge;
+  Counts, Triples, KeyCounts: TDictionary<string, Integer>;
+  PropMap, EdgePropMap: TObjectDictionary<string, TDictionary<string, Integer>>;
+  Keys, PropKeys: TArray<string>;
+  Key, PropKey, Owner, Line: string;
+  CommMap: TDictionary<TAiRagGraphNode, Integer>;
+  Groups: TObjectDictionary<Integer, TList<TAiRagGraphNode>>;
+  GroupList: TList<TAiRagGraphNode>;
+  GroupArr: TArray<TList<TAiRagGraphNode>>;
+  J: Integer;
+  SeedNodes: TList<TAiRagGraphNode>;
+  Scored: TList<TPair<TAiRagGraphNode, Double>>;
+  AllPaths: TArray<TArray<TObject>>;
+
+  function CommandName(AType: TGraphCommandType): string;
+  begin
+    case AType of
+      cmdShowLabels: Result := 'SHOW LABELS';
+      cmdShowEdges: Result := 'SHOW EDGES';
+      cmdShowSchema: Result := 'SHOW SCHEMA';
+      cmdShowProperties: Result := 'SHOW PROPERTIES';
+      cmdShortestPath: Result := 'SHORTEST PATH';
+      cmdAllShortestPaths: Result := 'ALL SHORTEST PATHS';
+      cmdCentrality: Result := 'GET CENTRALITY';
+      cmdCentralityTop: Result := 'GET CENTRALITY TOP';
+      cmdDegrees: Result := 'GET DEGREES TOP';
+      cmdCommunities: Result := 'GET COMMUNITIES';
+      cmdNeighbors: Result := 'GET NEIGHBORS';
+    else
+      Result := '';
+    end;
+  end;
+
   // --- Funci�n auxiliar FindNodeByPattern (se mantiene igual) ---
   function FindNodeByPattern(APattern: TMatchNodePattern): TAiRagGraphNode;
   var
@@ -2722,6 +3078,13 @@ begin
   try
     QueryObj := Parser.Parse;
     try
+      if Parser.Explain then
+      begin
+        // EXPLAIN: el plan, sin ejecutar nada
+        Result := GQLExplain(QueryObj, CommandName(Parser.CommandType));
+        Exit;
+      end;
+
       if Parser.CommandType <> cmdNone then
       begin
         // =========================================================
@@ -2817,10 +3180,10 @@ begin
                   ResDict := TDictionary<string, TObject>.Create;
                   ResDict.Add('type', TStringWrapper.Create('centrality_score'));
                   ResDict.Add('node', TStringWrapper.Create(StartNode.Name));
-                  ResDict.Add('value', TStringWrapper.Create(FormatFloat('0.####', Score)));
+                  ResDict.Add('value', TStringWrapper.Create(FormatFloat('0.####', Score, TFormatSettings.Invariant)));
                   AResultObjects[0] := ResDict;
 
-                  Result := Format('Centrality Score for node "%s" (%s): %s', [StartNode.Name, StartNode.NodeLabel, FormatFloat('0.####', Score)]);
+                  Result := Format('Centrality Score for node "%s" (%s): %s', [StartNode.Name, StartNode.NodeLabel, FormatFloat('0.####', Score, TFormatSettings.Invariant)]);
                 end
                 else
                   Result := 'Node not found for centrality calculation.';
@@ -2845,6 +3208,323 @@ begin
                   ResDict.Add('type', TStringWrapper.Create('node'));
                   ResDict.Add('element', NodeListResult[I]);
                   AResultObjects[I] := ResDict;
+                end;
+              end;
+            // -------------------------------------------------------
+            // SHOW SCHEMA: etiquetas y combinaciones (:A)-[:TIPO]->(:B)
+            // -------------------------------------------------------
+            cmdShowSchema:
+              begin
+                Counts := TDictionary<string, Integer>.Create;
+                Triples := TDictionary<string, Integer>.Create;
+                try
+                  for Node in FNodeRegistry.Values do
+                  begin
+                    GQLBump(Counts, Node.NodeLabel);
+                    for Edge in Node.OutgoingEdges do
+                    begin
+                      Key := '(:' + Edge.FromNode.NodeLabel + ')-[:' + Edge.EdgeLabel + ']->(:' + Edge.ToNode.NodeLabel + ')';
+                      GQLBump(Triples, Key);
+                    end;
+                  end;
+                  Rows := [];
+                  ContextBuilder.AppendLine('### NODE LABELS ###');
+                  Keys := Counts.Keys.ToArray;
+                  TArray.Sort<string>(Keys, TIStringComparer.Ordinal);
+                  for Key in Keys do
+                  begin
+                    ContextBuilder.AppendFormat('- %s (%d)', [Key, Counts[Key]]).AppendLine;
+                    ResDict := TDictionary<string, TObject>.Create;
+                    ResDict.Add('type', TStringWrapper.Create('label'));
+                    ResDict.Add('value', TStringWrapper.Create(Key));
+                    ResDict.Add('count', TGQLValue.CreateValue(Counts[Key]));
+                    Rows := Rows + [ResDict];
+                  end;
+                  ContextBuilder.AppendLine('### RELATIONSHIPS ###');
+                  Keys := Triples.Keys.ToArray;
+                  TArray.Sort<string>(Keys, TIStringComparer.Ordinal);
+                  for Key in Keys do
+                  begin
+                    ContextBuilder.AppendFormat('- %s (%d)', [Key, Triples[Key]]).AppendLine;
+                    ResDict := TDictionary<string, TObject>.Create;
+                    ResDict.Add('type', TStringWrapper.Create('schema'));
+                    ResDict.Add('value', TStringWrapper.Create(Key));
+                    ResDict.Add('count', TGQLValue.CreateValue(Triples[Key]));
+                    Rows := Rows + [ResDict];
+                  end;
+                  AResultObjects := Rows;
+                  Result := ContextBuilder.ToString;
+                finally
+                  Triples.Free;
+                  Counts.Free;
+                end;
+              end;
+
+            // -------------------------------------------------------
+            // SHOW PROPERTIES [OF etiqueta]: claves de metadatos
+            // -------------------------------------------------------
+            cmdShowProperties:
+              begin
+                PropMap := TObjectDictionary < string, TDictionary < string, Integer >>.Create([doOwnsValues]);
+                EdgePropMap := TObjectDictionary < string, TDictionary < string, Integer >>.Create([doOwnsValues]);
+                try
+                  for Node in FNodeRegistry.Values do
+                  begin
+                    if (Parser.CommandLabel = '') or SameText(Node.NodeLabel, Parser.CommandLabel) then
+                    begin
+                      if not PropMap.TryGetValue(Node.NodeLabel, KeyCounts) then
+                      begin
+                        KeyCounts := TDictionary<string, Integer>.Create;
+                        PropMap.Add(Node.NodeLabel, KeyCounts);
+                      end;
+                      for Key in Node.MetaData.InternalDictionary.Keys do
+                        GQLBump(KeyCounts, Key);
+                    end;
+                    for Edge in Node.OutgoingEdges do
+                      if (Parser.CommandLabel = '') or SameText(Edge.EdgeLabel, Parser.CommandLabel) then
+                      begin
+                        if not EdgePropMap.TryGetValue(Edge.EdgeLabel, KeyCounts) then
+                        begin
+                          KeyCounts := TDictionary<string, Integer>.Create;
+                          EdgePropMap.Add(Edge.EdgeLabel, KeyCounts);
+                        end;
+                        for Key in Edge.MetaData.InternalDictionary.Keys do
+                          GQLBump(KeyCounts, Key);
+                      end;
+                  end;
+
+                  Rows := [];
+                  for var Pass := 0 to 1 do
+                  begin
+                    if Pass = 0 then
+                    begin
+                      ContextBuilder.AppendLine('### NODE PROPERTIES ###');
+                      ContextBuilder.AppendLine('(every node also has name, label and id)');
+                      Keys := PropMap.Keys.ToArray;
+                    end
+                    else
+                    begin
+                      ContextBuilder.AppendLine('### RELATIONSHIP PROPERTIES ###');
+                      ContextBuilder.AppendLine('(every relationship also has label, id and weight)');
+                      Keys := EdgePropMap.Keys.ToArray;
+                    end;
+                    TArray.Sort<string>(Keys, TIStringComparer.Ordinal);
+                    for Key in Keys do
+                    begin
+                      if Pass = 0 then
+                      begin
+                        KeyCounts := PropMap[Key];
+                        Owner := ':' + Key;
+                      end
+                      else
+                      begin
+                        KeyCounts := EdgePropMap[Key];
+                        Owner := '[:' + Key + ']';
+                      end;
+                      PropKeys := KeyCounts.Keys.ToArray;
+                      TArray.Sort<string>(PropKeys, TIStringComparer.Ordinal);
+                      Line := '';
+                      for PropKey in PropKeys do
+                      begin
+                        if Line <> '' then
+                          Line := Line + ', ';
+                        Line := Line + Format('%s (%d)', [PropKey, KeyCounts[PropKey]]);
+                        ResDict := TDictionary<string, TObject>.Create;
+                        ResDict.Add('type', TStringWrapper.Create('property'));
+                        ResDict.Add('owner', TStringWrapper.Create(Owner));
+                        ResDict.Add('value', TStringWrapper.Create(PropKey));
+                        ResDict.Add('count', TGQLValue.CreateValue(KeyCounts[PropKey]));
+                        Rows := Rows + [ResDict];
+                      end;
+                      if Line = '' then
+                        Line := '(none)';
+                      ContextBuilder.Append('- ').Append(Owner).Append(': ').AppendLine(Line);
+                    end;
+                  end;
+                  AResultObjects := Rows;
+                  Result := ContextBuilder.ToString;
+                finally
+                  EdgePropMap.Free;
+                  PropMap.Free;
+                end;
+              end;
+
+            // -------------------------------------------------------
+            // GET COMMUNITIES [TOP n]
+            // -------------------------------------------------------
+            cmdCommunities:
+              begin
+                CommMap := Self.DetectCommunities;
+                Groups := TObjectDictionary < Integer, TList < TAiRagGraphNode >>.Create([doOwnsValues]);
+                try
+                  for var CP in CommMap do
+                  begin
+                    if not Groups.TryGetValue(CP.Value, GroupList) then
+                    begin
+                      GroupList := TList<TAiRagGraphNode>.Create;
+                      Groups.Add(CP.Value, GroupList);
+                    end;
+                    GroupList.Add(CP.Key);
+                  end;
+                  // Cada grupo por nombre; los grupos de mayor a menor (empate: el primer nombre)
+                  for GroupList in Groups.Values do
+                    GroupList.Sort(TComparer<TAiRagGraphNode>.Construct(
+                      function(const A, B: TAiRagGraphNode): Integer
+                      begin
+                        Result := CompareText(A.Name, B.Name);
+                      end));
+                  GroupArr := Groups.Values.ToArray;
+                  TArray.Sort < TList < TAiRagGraphNode >> (GroupArr, TComparer < TList < TAiRagGraphNode >>.Construct(
+                    function(const A, B: TList<TAiRagGraphNode>): Integer
+                    begin
+                      Result := B.Count - A.Count;
+                      if Result = 0 then
+                        Result := CompareText(A[0].Name, B[0].Name);
+                    end));
+                  Rows := [];
+                  ContextBuilder.AppendFormat('### COMMUNITIES (%d) ###', [Length(GroupArr)]).AppendLine;
+                  for I := 0 to High(GroupArr) do
+                  begin
+                    if (Parser.CommandLimit > 0) and (I >= Parser.CommandLimit) then
+                      Break;
+                    GroupList := GroupArr[I];
+                    Line := '';
+                    var MemberNames: TArray<string> := [];
+                    for J := 0 to GroupList.Count - 1 do
+                    begin
+                      MemberNames := MemberNames + [GroupList[J].Name];
+                      if J < 20 then
+                      begin
+                        if Line <> '' then
+                          Line := Line + ', ';
+                        Line := Line + GroupList[J].Name;
+                      end;
+                    end;
+                    if GroupList.Count > 20 then
+                      Line := Line + ', ...';
+                    ContextBuilder.AppendFormat('- Community %d (%d nodes): %s', [I + 1, GroupList.Count, Line]).AppendLine;
+                    ResDict := TDictionary<string, TObject>.Create;
+                    ResDict.Add('type', TStringWrapper.Create('community'));
+                    ResDict.Add('id', TGQLValue.CreateValue(I + 1));
+                    ResDict.Add('size', TGQLValue.CreateValue(GroupList.Count));
+                    ResDict.Add('members', TGQLValue.CreateValue(GQLStringsToVarArray(MemberNames)));
+                    Rows := Rows + [ResDict];
+                  end;
+                  AResultObjects := Rows;
+                  Result := ContextBuilder.ToString;
+                finally
+                  Groups.Free;
+                  CommMap.Free;
+                end;
+              end;
+
+            // -------------------------------------------------------
+            // GET NEIGHBORS (nodo) [DEPTH n]
+            // -------------------------------------------------------
+            cmdNeighbors:
+              begin
+                StartNode := FindNodeByPattern(Parser.CommandSourcePattern);
+                if StartNode <> nil then
+                begin
+                  SeedNodes := TList<TAiRagGraphNode>.Create;
+                  try
+                    SeedNodes.Add(StartNode);
+                    if Parser.CommandLimit > 1 then
+                      NodeListResult := Self.ExpandNodeList(SeedNodes, Parser.CommandLimit)
+                    else
+                      NodeListResult := Self.ExpandNodeList(SeedNodes, 1);
+                  finally
+                    SeedNodes.Free;
+                  end;
+                  Result := Self.GraphToContextText(NodeListResult);
+                  SetLength(AResultObjects, Length(NodeListResult));
+                  for I := 0 to High(NodeListResult) do
+                  begin
+                    ResDict := TDictionary<string, TObject>.Create;
+                    ResDict.Add('type', TStringWrapper.Create('node'));
+                    ResDict.Add('element', NodeListResult[I]);
+                    AResultObjects[I] := ResDict;
+                  end;
+                end
+                else
+                  Result := 'Node not found.';
+              end;
+
+            // -------------------------------------------------------
+            // GET CENTRALITY TOP n (cercanía)
+            // -------------------------------------------------------
+            cmdCentralityTop:
+              begin
+                Scored := TList < TPair < TAiRagGraphNode, Double >>.Create;
+                try
+                  for Node in FNodeRegistry.Values do
+                    Scored.Add(TPair<TAiRagGraphNode, Double>.Create(Node, Self.GetClosenessCentrality(Node)));
+                  Scored.Sort(TComparer < TPair < TAiRagGraphNode, Double >>.Construct(
+                    function(const A, B: TPair<TAiRagGraphNode, Double>): Integer
+                    begin
+                      if A.Value > B.Value then
+                        Result := -1
+                      else if A.Value < B.Value then
+                        Result := 1
+                      else
+                        Result := CompareText(A.Key.Name, B.Key.Name);
+                    end));
+                  Rows := [];
+                  ContextBuilder.AppendFormat('### CENTRALITY (closeness) TOP %d ###', [Parser.CommandLimit]).AppendLine;
+                  for I := 0 to Scored.Count - 1 do
+                  begin
+                    if I >= Parser.CommandLimit then
+                      Break;
+                    ContextBuilder.AppendFormat('- %s (:%s): %s', [Scored[I].Key.Name, Scored[I].Key.NodeLabel,
+                      FormatFloat('0.####', Scored[I].Value, TFormatSettings.Invariant)]).AppendLine;
+                    ResDict := TDictionary<string, TObject>.Create;
+                    ResDict.Add('type', TStringWrapper.Create('node'));
+                    ResDict.Add('element', Scored[I].Key);
+                    ResDict.Add('score', TGQLValue.CreateValue(Scored[I].Value));
+                    Rows := Rows + [ResDict];
+                  end;
+                  AResultObjects := Rows;
+                  Result := ContextBuilder.ToString;
+                finally
+                  Scored.Free;
+                end;
+              end;
+
+            // -------------------------------------------------------
+            // ALL SHORTEST PATHS (a) TO (b)
+            // -------------------------------------------------------
+            cmdAllShortestPaths:
+              begin
+                StartNode := FindNodeByPattern(Parser.CommandSourcePattern);
+                EndNode := FindNodeByPattern(Parser.CommandTargetPattern);
+                AllPaths := [];
+                if (StartNode <> nil) and (EndNode <> nil) then
+                  AllPaths := Self.GetAllShortestPaths(StartNode, EndNode);
+                if Length(AllPaths) = 0 then
+                  Result := 'No path found or nodes do not exist.'
+                else
+                begin
+                  Rows := [];
+                  ContextBuilder.AppendFormat('### ALL SHORTEST PATHS (%d) ###', [Length(AllPaths)]).AppendLine;
+                  for I := 0 to High(AllPaths) do
+                  begin
+                    var PNodes: TArray<TAiRagGraphNode> := [];
+                    var PEdges: TArray<TAiRagGraphEdge> := [];
+                    for PathObj in AllPaths[I] do
+                      if PathObj is TAiRagGraphNode then
+                        PNodes := PNodes + [TAiRagGraphNode(PathObj)]
+                      else if PathObj is TAiRagGraphEdge then
+                        PEdges := PEdges + [TAiRagGraphEdge(PathObj)];
+                    var PathVal := TGQLPath.CreatePath(PNodes, PEdges);
+                    ContextBuilder.AppendFormat('%d. %s', [I + 1, PathVal.Value]).AppendLine;
+                    ResDict := TDictionary<string, TObject>.Create;
+                    ResDict.Add('type', TStringWrapper.Create('path'));
+                    ResDict.Add('path', PathVal);
+                    ResDict.Add('length', TGQLValue.CreateValue(Length(PEdges)));
+                    Rows := Rows + [ResDict];
+                  end;
+                  AResultObjects := Rows;
+                  Result := ContextBuilder.ToString;
                 end;
               end;
           end;
@@ -6516,6 +7196,25 @@ begin
   Result := VarArrayCreate([0, Length(Edges) - 1], varVariant);
   for I := 0 to High(Edges) do
     Result[I] := Edges[I].EdgeLabel;
+end;
+
+{ TSimilarExpr }
+constructor TSimilarExpr.Create(ATarget, AText, AThreshold: TGraphExpression; AStrict: Boolean);
+begin
+  inherited Create;
+  Kind := ekSimilar;
+  Target := ATarget;
+  Text := AText;
+  Threshold := AThreshold;
+  StrictGreater := AStrict;
+end;
+
+destructor TSimilarExpr.Destroy;
+begin
+  Target.Free;
+  Text.Free;
+  Threshold.Free;
+  inherited;
 end;
 
 { TPatternExpr }

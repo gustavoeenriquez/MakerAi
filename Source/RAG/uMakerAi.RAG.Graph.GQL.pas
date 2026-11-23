@@ -69,7 +69,8 @@ type
     tkPercent, // %
     tkPipe); // | (alternativas de etiqueta: [:A|B])
 
-  TGraphCommandType = (cmdNone, cmdShowLabels, cmdShowEdges, cmdShortestPath, cmdCentrality, cmdDegrees);
+  TGraphCommandType = (cmdNone, cmdShowLabels, cmdShowEdges, cmdShortestPath, cmdCentrality, cmdDegrees,
+    cmdShowSchema, cmdShowProperties, cmdCommunities, cmdNeighbors, cmdCentralityTop, cmdAllShortestPaths);
 
   TToken = record
     Kind: TTokenKind;
@@ -130,6 +131,8 @@ type
     FCommandSourcePattern: TMatchNodePattern;
     FCommandTargetPattern: TMatchNodePattern;
     FCommandLimit: Integer;
+    FCommandLabel: string; // SHOW PROPERTIES OF <etiqueta>
+    FExplain: Boolean;
 
     procedure Next;
     function GetTokenTextAndNext: string;
@@ -180,6 +183,9 @@ type
     property CommandSourcePattern: TMatchNodePattern read FCommandSourcePattern;
     property CommandTargetPattern: TMatchNodePattern read FCommandTargetPattern;
     property CommandLimit: Integer read FCommandLimit;
+    property CommandLabel: string read FCommandLabel;
+    // EXPLAIN <consulta>: describir el plan sin ejecutarla
+    property Explain: Boolean read FExplain;
   end;
 
 implementation
@@ -1245,7 +1251,7 @@ function TGraphParser.ParseComparison: TGraphExpression;
 var
   L, Lo, Hi: TGraphExpression;
   Op: TBinaryOp;
-  Negated: Boolean;
+  Negated, StrictGt: Boolean;
 begin
   L := ParseAdditive;
   try
@@ -1298,6 +1304,29 @@ begin
         raise;
       end;
       Result := TBetweenExpr.Create(L, Lo, Hi);
+    end
+    else if IsWord('SIMILAR') then
+    begin
+      // n SIMILAR TO 'texto' [> umbral | >= umbral]: similitud de embeddings (por defecto >= 0.5)
+      if not(L is TVariableExpr) then
+        raise EGQLParserError.CreateAt(AiStr('rag.gql.similar_var'), FCurrent.Position);
+      Next;
+      Expect(tkTo); // TO es reservada (SHORTEST PATH ... TO ...)
+      Lo := ParseAdditive;
+      Hi := nil;
+      StrictGt := False;
+      try
+        if FCurrent.Kind in [tkGreater, tkGreaterEqual] then
+        begin
+          StrictGt := FCurrent.Kind = tkGreater;
+          Next;
+          Hi := ParseAdditive;
+        end;
+      except
+        Lo.Free;
+        raise;
+      end;
+      Result := TSimilarExpr.Create(L, Lo, Hi, StrictGt);
     end
     else if IsWord('STARTS') or IsWord('ENDS') then
     begin
@@ -1508,7 +1537,7 @@ type
   end;
 
 const
-  GQL_FUNCTIONS: array [0 .. 40] of TGQLFunctionInfo = (
+  GQL_FUNCTIONS: array [0 .. 41] of TGQLFunctionInfo = (
     // Texto
     (Name: 'lower'; MinArgs: 1; MaxArgs: 1; NeedsVariable: False), (Name: 'upper'; MinArgs: 1; MaxArgs: 1; NeedsVariable: False),
     (Name: 'trim'; MinArgs: 1; MaxArgs: 1; NeedsVariable: False), (Name: 'ltrim'; MinArgs: 1; MaxArgs: 1; NeedsVariable: False),
@@ -1529,6 +1558,7 @@ const
     (Name: 'labels'; MinArgs: 1; MaxArgs: 1; NeedsVariable: True), (Name: 'type'; MinArgs: 1; MaxArgs: 1; NeedsVariable: True),
     (Name: 'degree'; MinArgs: 1; MaxArgs: 1; NeedsVariable: True), (Name: 'indegree'; MinArgs: 1; MaxArgs: 1; NeedsVariable: True),
     (Name: 'outdegree'; MinArgs: 1; MaxArgs: 1; NeedsVariable: True), (Name: 'keys'; MinArgs: 1; MaxArgs: 1; NeedsVariable: True),
+    (Name: 'similarity'; MinArgs: 2; MaxArgs: 2; NeedsVariable: True),
     (Name: 'nodes'; MinArgs: 1; MaxArgs: 1; NeedsVariable: True), (Name: 'relationships'; MinArgs: 1; MaxArgs: 1; NeedsVariable: True),
     // Listas
     (Name: 'head'; MinArgs: 1; MaxArgs: 1; NeedsVariable: False), (Name: 'last'; MinArgs: 1; MaxArgs: 1; NeedsVariable: False),
@@ -1786,22 +1816,78 @@ begin
   FCommandType := cmdNone;
   ClearCommandPatterns;
 
+  // 0. EXPLAIN <consulta>: se parsea igual pero el ejecutor solo describe el plan
+  FExplain := IsWord('EXPLAIN');
+  if FExplain then
+    Next;
+
   // 1. Comandos de Introspección (SHOW...)
   if FCurrent.Kind = tkShow then
   begin
     Next; // Consumir 'SHOW'
     if FCurrent.Kind = tkLabels then
-      FCommandType := cmdShowLabels
+    begin
+      FCommandType := cmdShowLabels;
+      Next;
+    end
     else if FCurrent.Kind = tkEdges then
-      FCommandType := cmdShowEdges
+    begin
+      FCommandType := cmdShowEdges;
+      Next;
+    end
+    else if IsWord('SCHEMA') then
+    begin
+      // Etiquetas con su cantidad y las combinaciones (:A)-[:TIPO]->(:B) que existen
+      FCommandType := cmdShowSchema;
+      Next;
+    end
+    else if IsWord('PROPERTIES') then
+    begin
+      // SHOW PROPERTIES [OF [:]Etiqueta]: claves de metadatos por etiqueta y por tipo de relación
+      FCommandType := cmdShowProperties;
+      Next;
+      if IsWord('OF') then
+      begin
+        Next;
+        if FCurrent.Kind = tkColon then
+          Next;
+        FCommandLabel := FCurrent.Text;
+        Expect(tkIdentifier);
+      end;
+    end
     else
       raise EGQLParserError.CreateAt(AiStr('rag.gql.show'), FCurrent.Position);
-    Next; // Avanzamos después del comando show
     ExpectEnd;
     Exit;
   end;
 
   // 2. Comandos de Algoritmos de Grafo
+  // ALL SHORTEST PATHS (a) TO (b): todos los caminos de longitud mínima
+  if IsWord('ALL') then
+  begin
+    Next;
+    Expect(tkShortest);
+    if IsWord('PATHS') then
+      Next
+    else
+      Expect(tkPath);
+    FCommandType := cmdAllShortestPaths;
+    TempQuery := TGraphMatchQuery.Create;
+    try
+      Src := ParseNode(TempQuery);
+      TempQuery.NodePatterns.Extract(Src);
+      FCommandSourcePattern := Src;
+      Expect(tkTo);
+      Dst := ParseNode(TempQuery);
+      TempQuery.NodePatterns.Extract(Dst);
+      FCommandTargetPattern := Dst;
+    finally
+      TempQuery.Free;
+    end;
+    ExpectEnd;
+    Exit;
+  end;
+
   if FCurrent.Kind = tkShortest then
   begin
     Next; // Consumir 'SHORTEST'
@@ -1829,14 +1915,24 @@ begin
     if FCurrent.Kind = tkCentrality then
     begin
       Next;
-      FCommandType := cmdCentrality;
-      TempQuery := TGraphMatchQuery.Create;
-      try
-        Src := ParseNode(TempQuery);
-        TempQuery.NodePatterns.Extract(Src);
-        FCommandSourcePattern := Src;
-      finally
-        TempQuery.Free;
+      if FCurrent.Kind = tkTop then
+      begin
+        // GET CENTRALITY TOP n: los n nodos más centrales
+        Next;
+        FCommandType := cmdCentralityTop;
+        FCommandLimit := ParseIntegerValue(AiFmt('rag.gql.expected', ['tkNumber', FCurrent.Text, FCurrent.Position]));
+      end
+      else
+      begin
+        FCommandType := cmdCentrality;
+        TempQuery := TGraphMatchQuery.Create;
+        try
+          Src := ParseNode(TempQuery);
+          TempQuery.NodePatterns.Extract(Src);
+          FCommandSourcePattern := Src;
+        finally
+          TempQuery.Free;
+        end;
       end;
     end
     else if FCurrent.Kind = tkDegrees then
@@ -1845,6 +1941,38 @@ begin
       FCommandType := cmdDegrees;
       Expect(tkTop);
       FCommandLimit := ParseIntegerValue(AiFmt('rag.gql.expected', ['tkNumber', FCurrent.Text, FCurrent.Position]));
+    end
+    else if IsWord('COMMUNITIES') then
+    begin
+      // GET COMMUNITIES [TOP n]: grupos de nodos muy conectados entre sí
+      Next;
+      FCommandType := cmdCommunities;
+      FCommandLimit := 0;
+      if FCurrent.Kind = tkTop then
+      begin
+        Next;
+        FCommandLimit := ParseIntegerValue(AiFmt('rag.gql.expected', ['tkNumber', FCurrent.Text, FCurrent.Position]));
+      end;
+    end
+    else if IsWord('NEIGHBORS') then
+    begin
+      // GET NEIGHBORS (nodo) [DEPTH n]: el vecindario como texto de contexto
+      Next;
+      FCommandType := cmdNeighbors;
+      TempQuery := TGraphMatchQuery.Create;
+      try
+        Src := ParseNode(TempQuery);
+        TempQuery.NodePatterns.Extract(Src);
+        FCommandSourcePattern := Src;
+      finally
+        TempQuery.Free;
+      end;
+      FCommandLimit := 1;
+      if FCurrent.Kind = tkDepth then
+      begin
+        Next;
+        FCommandLimit := ParseIntegerValue(AiStr('rag.gql.depth'));
+      end;
     end
     else
       raise EGQLParserError.CreateAt(AiStr('rag.gql.get'), FCurrent.Position);

@@ -244,6 +244,9 @@ type
     // Embeddings deterministas sin red: el mismo vector para cualquier texto
     procedure FakeEmbedding(Sender: TObject; const aInput, aUser, aModel, aEncodingFormat: String;
       aDimensions: Integer; var aEmbedding: TAiEmbeddingData);
+    // Embeddings por palabras clave (SIMILAR TO de MakerGQL): [chocolate, frut, floral, 0.1]
+    procedure KeywordEmbedding(Sender: TObject; const aInput, aUser, aModel, aEncodingFormat: String;
+      aDimensions: Integer; var aEmbedding: TAiEmbeddingData);
     // Nodo de grafo: encadena el nombre del nodo al input
     procedure NodeExec(Node, BeforeNode: TAIAgentsNode; Link: TAIAgentsLink; Input: string; var Output: string);
     // Igual pero lento: fuerza solapamiento real entre tasks concurrentes y
@@ -756,6 +759,19 @@ begin
   SetLength(aEmbedding, 4);
   for I := 0 to 3 do
     aEmbedding[I] := 0.5;
+end;
+
+procedure TFixtureHandlers.KeywordEmbedding(Sender: TObject; const aInput, aUser, aModel,
+  aEncodingFormat: String; aDimensions: Integer; var aEmbedding: TAiEmbeddingData);
+var
+  T: string;
+begin
+  T := LowerCase(aInput);
+  SetLength(aEmbedding, 4);
+  aEmbedding[0] := Ord(Pos('chocolate', T) > 0);
+  aEmbedding[1] := Ord(Pos('frut', T) > 0);
+  aEmbedding[2] := Ord(Pos('floral', T) > 0);
+  aEmbedding[3] := 0.1;
 end;
 
 procedure TFixtureHandlers.NodeExec(Node, BeforeNode: TAIAgentsNode; Link: TAIAgentsLink; Input: string; var Output: string);

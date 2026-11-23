@@ -6,7 +6,8 @@
 > Actualizado a la sintaxis posterior a la v4.0.0 (BETWEEN, STARTS/ENDS WITH, NOT, XOR,
 > parámetros `$x`, negativos, comentarios, patrones separados por coma, funciones, aritmética,
 > `RETURN` con columnas, agregados, `DISTINCT`, `ORDER BY`, `SKIP`, `LIMIT` y `WITH`,
-> y patrones: `[:A|B]`, longitud variable `*1..3`, caminos `p = ...`, `OPTIONAL MATCH` y patrones en el `WHERE`).
+> patrones: `[:A|B]`, longitud variable `*1..3`, caminos `p = ...`, `OPTIONAL MATCH` y patrones en el `WHERE`,
+> y comandos: `SHOW SCHEMA`, `SHOW PROPERTIES`, comunidades, vecinos, `EXPLAIN` y búsqueda semántica `SIMILAR TO`).
 
 ---
 
@@ -19,11 +20,17 @@ Devuelve **únicamente la consulta**, sin markdown y sin explicaciones.
 ### 1. Gramática soportada
 
 ```
-consulta := comando | consultaMatch   [';']
+consulta := [EXPLAIN] (comando | consultaMatch)   [';']
 
 comando := SHOW LABELS
          | SHOW EDGES
+         | SHOW SCHEMA
+         | SHOW PROPERTIES [OF [:]Etiqueta]
          | SHORTEST PATH nodo TO nodo
+         | ALL SHORTEST PATHS nodo TO nodo
+         | GET CENTRALITY TOP <entero>
+         | GET COMMUNITIES [TOP <entero>]
+         | GET NEIGHBORS nodo [DEPTH <entero>]
          | GET CENTRALITY nodo
          | GET DEGREES TOP <entero>
 
@@ -56,6 +63,7 @@ comparacion := operando OP operando
              | operando [NOT] STARTS WITH operando
              | operando [NOT] ENDS WITH operando
              | operando IS [NOT] NULL
+             | var [NOT] SIMILAR TO operando [('>' | '>=') umbral]   // embeddings; sin umbral: >= 0.5
 operando := termino { ('+' | '-') termino }
 termino  := factor { ('*' | '/' | '%') factor }
 factor   := var.prop | var | funcion '(' [operando {',' operando}] ')' | literal | $parametro
@@ -97,6 +105,7 @@ no al final de la consulta.
    | Nulos | `coalesce(a, b, ...)` (el primero no nulo), `exists(n.prop)` (= `IS NOT NULL`) |
    | Grafo (reciben la **variable**, no una propiedad) | `id(n)`, `label(n)`, `labels(n)` → lista, `type(r)`, `degree(n)`, `inDegree(n)`, `outDegree(n)`, `keys(n)` → lista de claves |
    | Caminos (variable `p = ...` o arista de longitud variable `[r*1..3]`) | `length(p)` (saltos), `nodes(p)` → nombres, `relationships(p)` → tipos |
+   | Semántica (necesita embeddings en el grafo) | `similarity(n, 'texto')` → 0..1 (coseno), para `RETURN` y `ORDER BY`; `NULL` si el nodo no tiene embedding |
    | Listas | `head(lista)`, `last(lista)`; `x IN lista` (`'Persona' IN labels(n)`, `'rojo' IN split(n.colores, ',')`) |
    | Fechas | `date()`, `date('2026-11-23')`, `datetime()`, `datetime(x)`, `year(x)`, `month(x)`, `day(x)` (aceptan fecha o texto ISO) |
 
@@ -196,18 +205,37 @@ devuelve los productos con algo que la persona evita (lo mismo que la forma con 
 ### 8. Comandos especiales
 
 ```
+SHOW SCHEMA                                  -- etiquetas con su cantidad y qué relación une qué: EMPIEZA POR AQUÍ
+SHOW PROPERTIES                              -- claves de propiedades por etiqueta y por tipo de relación
+SHOW PROPERTIES OF :Producto                 -- solo las de una etiqueta (o tipo de relación)
 SHOW LABELS                                  -- lista los tipos de nodo existentes
 SHOW EDGES                                   -- lista los tipos de relación existentes
 SHORTEST PATH (:Persona {name:'Steve Jobs'}) TO (:Empresa {name:'Apple'})
+ALL SHORTEST PATHS (:Persona {name:'Ana'}) TO (:Ciudad {name:'Lima'})   -- todos los de longitud mínima
 GET CENTRALITY (:Persona {name:'Steve Jobs'})
+GET CENTRALITY TOP 5                         -- los nodos más centrales (cercanía)
 GET DEGREES TOP 10                           -- nodos más conectados (hubs)
+GET COMMUNITIES TOP 3                        -- grupos de nodos muy conectados entre sí
+GET NEIGHBORS (:Persona {name:'Ana'}) DEPTH 2   -- su vecindario como texto de contexto
+EXPLAIN MATCH ...                            -- cómo se ejecutaría la consulta, sin ejecutarla
 ```
 
-- `SHORTEST PATH` **no lleva `GET` delante**. `GET` solo acompaña a `CENTRALITY` y `DEGREES TOP n`.
+- **Si no conoces el grafo, emite primero `SHOW SCHEMA`**: dice qué etiquetas existen, cuántos nodos tiene cada
+  una y qué relaciones unen qué etiquetas (`(:Producto)-[:TIENE_ACIDEZ]->(:Acidez) (3)`), justo lo que necesitas
+  para escribir un `MATCH` correcto. Luego `SHOW PROPERTIES OF :Etiqueta` para saber qué propiedades filtrar.
+- `SHORTEST PATH` y `ALL SHORTEST PATHS` siguen la dirección de las flechas.
+- `SHORTEST PATH` **no lleva `GET` delante**. `GET` acompaña a `CENTRALITY`, `DEGREES`, `COMMUNITIES` y `NEIGHBORS`.
 - En estos comandos el patrón debe identificar **un único nodo** (se toma el primer match):
   usa siempre `{name:'...'}` y preferiblemente la etiqueta.
-- No admiten `WHERE`, `DEPTH` ni `RETURN`.
-- Si no conoces las etiquetas del grafo, emite primero `SHOW LABELS` / `SHOW EDGES`.
+- No admiten `WHERE` ni `RETURN` (`GET NEIGHBORS` sí admite `DEPTH`).
+
+### 8b. Búsqueda semántica
+
+Si el grafo tiene embeddings, `c SIMILAR TO 'texto'` compara el significado del nodo con el texto
+(sin umbral pide similitud >= 0.5; `SIMILAR TO 'texto' > 0.8` es más estricto). Combínalo con el patrón
+para precisión: `MATCH (c:Producto)-[:TIENE_ACIDEZ]->(:Acidez {name:'Baja'}) WHERE c SIMILAR TO 'notas de chocolate'`.
+Para ordenar por parecido: `RETURN c.name, similarity(c, 'chocolate') AS s ORDER BY s DESC LIMIT 5`.
+Úsalo cuando la pregunta describa algo con palabras (sabores, temas, estilos) y no por un valor exacto.
 
 ### 9. Ejemplos válidos
 
@@ -287,6 +315,17 @@ MATCH (c:Cliente) WHERE NOT (c)-[:COMPRO]->(:Producto {categoria:'Cafe'}) RETURN
 ```
 
 ```gql
+MATCH (c:Producto)
+WHERE c SIMILAR TO 'café suave con notas de chocolate'
+RETURN c.name AS cafe, round(similarity(c, 'café suave con notas de chocolate') * 100) AS parecido
+ORDER BY parecido DESC LIMIT 5
+```
+
+```gql
+SHOW SCHEMA
+```
+
+```gql
 SHOW LABELS
 ```
 
@@ -302,6 +341,8 @@ SHORTEST PATH (:Persona {name:'Steve Jobs'}) TO (:Ciudad {name:'Cupertino'})
 | `-[:A OR B]->` | `-[:A\|B]->` |
 | `-[*1..]->` sin tope en un grafo grande | pon un máximo: `-[*1..4]->` |
 | `OPTIONAL MATCH p = (a)-[*]->(b)` | las variables de camino van en el `MATCH` principal |
+| `WHERE c.descripcion SIMILAR TO 'x'` | `WHERE c SIMILAR TO 'x'` (compara el nodo, no una propiedad) |
+| `GET SCHEMA` / `SHOW SCHEMA OF :X` | `SHOW SCHEMA` y `SHOW PROPERTIES OF :X` |
 | `WHERE (c)-[:COMPRO]->(x) AND x.precio > 10` | `x` no existe fuera del patrón: `EXISTS { MATCH (c)-[:COMPRO]->(x) WHERE x.precio > 10 }` |
 | `... RETURN p DEPTH 2` | `... DEPTH 2 ... RETURN p` |
 | `WHERE ciudad = 'Madrid'` | `WHERE p.ciudad = 'Madrid'` |

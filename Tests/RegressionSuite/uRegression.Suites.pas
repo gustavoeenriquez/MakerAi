@@ -627,6 +627,30 @@ begin
     .Input('rag:gql:exists')
     .ExpectEquals('Huila Reserva#Tolima Suave#Huila Reserva#Tolima Suave#Ana#| x |/|---|/| 24999 |/(1 rows)');
 
+  FRunner.AddCase('rag.gql.schema')
+    .Input('rag:gql:schema')
+    .ExpectEquals('### NODE LABELS ###/- Acidez (2)/- Finca (1)/- Persona (1)/- Producto (3)/- Tienda (2)/- Tostador (1)/' +
+      '### RELATIONSHIPS ###/- (:Finca)-[:PROVEE]->(:Tostador) (1)/- (:Persona)-[:NO_LE_GUSTO]->(:Acidez) (1)/' +
+      '- (:Producto)-[:CULTIVADO_EN]->(:Finca) (1)/- (:Producto)-[:TIENE_ACIDEZ]->(:Acidez) (3)/' +
+      '- (:Tienda)-[:PROVEE]->(:Tienda) (1)/- (:Tostador)-[:PROVEE]->(:Tienda) (1)/#' +
+      '### NODE PROPERTIES ###/(every node also has name, label and id)/- :Producto: origen (3), precio (3), zona cafetera (1)/' +
+      '### RELATIONSHIP PROPERTIES ###/(every relationship also has label, id and weight)/#True#error:EGQLParserError');
+
+  FRunner.AddCase('rag.gql.algos')
+    .Input('rag:gql:algos')
+    .ExpectEquals('Huila Reserva,La Ladera,Tostadora Sur#Alta,Cafe Centro,Huila Reserva,La Ladera,Tostadora Sur#True#' +
+      '### ALL SHORTEST PATHS (1) ###/1. (Huila Reserva)-[:CULTIVADO_EN]->(La Ladera)-[:PROVEE]->(Tostadora Sur)' +
+      '-[:PROVEE]->(Cafe Centro)-[:PROVEE]->(Cafe Norte)/#No path found or nodes do not exist.#miembros=10');
+
+  FRunner.AddCase('rag.gql.similar')
+    .Input('rag:gql:similar')
+    .ExpectEquals('Narino Alto,Tolima Suave#Narino Alto#Huila Reserva#' +
+      '| cafe | s |/|---|---|/| Narino Alto | 100 |/| Tolima Suave | 71 |/| Huila Reserva | 1 |/(3 rows)##error:EGQLParserError');
+
+  FRunner.AddCase('rag.gql.explain')
+    .Input('rag:gql:explain')
+    .ExpectEquals('True|True|True|True|True|True');
+
   FRunner.AddCase('rag.gql.no-leak')
     .Input('rag:gql:leak')
     .ExpectEquals('bloques=0');
@@ -5534,7 +5558,7 @@ begin
   try
     Emb.Model := 'fake';
     Emb.Dimensions := 4;
-    Emb.OnGetEmbedding := Handlers.FakeEmbedding;
+    Emb.OnGetEmbedding := Handlers.KeywordEmbedding;
     G.Embeddings := Emb;
 
     Huila := G.AddNode('p1', 'Producto', 'Huila Reserva');
@@ -5565,6 +5589,11 @@ begin
     G.AddEdge(Finca, Tostador, 'e6', 'PROVEE', 'provee');
     G.AddEdge(Tostador, Centro, 'e7', 'PROVEE', 'provee');
     G.AddEdge(Centro, Norte, 'e8', 'PROVEE', 'provee');
+    // Vectores (fase 6, SIMILAR TO): Huila frutal, Narino chocolate, Tolima chocolate y floral.
+    // Los demas nodos quedan en ceros (sin embedding): similarity() da NULL.
+    Huila.Data := [0, 1, 0, 0.1];
+    Narino.Data := [1, 0, 0, 0.1];
+    Tolima.Data := [0.7, 0, 0.7, 0.1];
 
     if Id = 'anon' then
       // Dos nodos sin variable: antes compartian la clave '' y no devolvia nada
@@ -5690,6 +5719,52 @@ begin
         Q('MATCH (c:Producto) WHERE EXISTS { MATCH (c)-[:TIENE_ACIDEZ]->(a) WHERE a.name = ''Baja'' }', []) + '#' +
         Q('MATCH (p:Persona) WHERE (p)-[:NO_LE_GUSTO]->(:Acidez)<-[:TIENE_ACIDEZ]-(:Producto {name:''Narino Alto''})', []) + '#' +
         Tab('MATCH (c:Producto) WITH c.precio AS pr RETURN (pr) - 1 AS x ORDER BY x LIMIT 1', [])
+    else if Id = 'schema' then
+      // Fase 6: esquema, propiedades (todas y de una etiqueta) y error de SHOW
+      Result := Tab('SHOW SCHEMA', []) + '#' + Tab('SHOW PROPERTIES OF :Producto', []) + '#' +
+        BoolToStr(Tab('SHOW PROPERTIES', []).Contains('- :Persona: saldo (1)'), True) + '#' + Tab('SHOW NADA', [])
+    else if Id = 'algos' then
+    begin
+      // Fase 6: vecinos, centralidad, todos los caminos mas cortos y comunidades (cubren todos los nodos)
+      Result := Q('GET NEIGHBORS (:Finca {name:''La Ladera''})', []) + '#' +
+        Q('GET NEIGHBORS (:Finca {name:''La Ladera''}) DEPTH 2', []) + '#' +
+        BoolToStr(Tab('GET CENTRALITY TOP 2', []).StartsWith('### CENTRALITY (closeness) TOP 2 ###'), True) + '#' +
+        Tab('ALL SHORTEST PATHS (:Producto {name:''Huila Reserva''}) TO (:Tienda {name:''Cafe Norte''})', []) + '#' +
+        Tab('ALL SHORTEST PATHS (:Tienda {name:''Cafe Norte''}) TO (:Producto {name:''Huila Reserva''})', []) + '#';
+      var Rows: TArray<TDictionary<string, TObject>> := nil;
+      try
+        G.ExecuteMakerGQL('GET COMMUNITIES', [], Rows);
+        var Total := 0;
+        var Obj: TObject;
+        for var Row in Rows do
+          if Row.TryGetValue('size', Obj) then
+            Total := Total + Integer(TGQLValue(Obj).Data);
+        Result := Result + 'miembros=' + IntToStr(Total);
+      finally
+        TAiRagGraph.FreeGQLResults(Rows);
+      end;
+    end
+    else if Id = 'similar' then
+      // Fase 6: SIMILAR TO con umbral por defecto (0.5), con > y NOT; similarity() para ordenar;
+      // un nodo sin embedding da NULL y no pasa; la variable es obligatoria
+      Result := Q('MATCH (c:Producto) WHERE c SIMILAR TO ''notas de chocolate''', []) + '#' +
+        Q('MATCH (c:Producto) WHERE c SIMILAR TO ''chocolate'' > 0.9', []) + '#' +
+        Q('MATCH (c:Producto) WHERE c NOT SIMILAR TO ''chocolate''', []) + '#' +
+        Tab('MATCH (c:Producto) RETURN c.name AS cafe, round(similarity(c, ''chocolate'') * 100) AS s ORDER BY s DESC', []) + '#' +
+        Q('MATCH (a:Acidez) WHERE a SIMILAR TO ''chocolate'' > 0', []) + '#' +
+        Q('MATCH (c:Producto) WHERE c.name SIMILAR TO ''chocolate''', [])
+    else if Id = 'explain' then
+    begin
+      // Fase 6: EXPLAIN describe el plan sin ejecutar
+      var Plan := Tab('EXPLAIN MATCH (c:Producto)-[:TIENE_ACIDEZ]->(a:Acidez), (p:Persona)-[:NO_LE_GUSTO]->(a) ' +
+        'OPTIONAL MATCH (c)-[:CULTIVADO_EN]->(f) WHERE c.precio > 1 RETURN a.name, count(*) AS n ORDER BY n DESC LIMIT 3', []);
+      Result := BoolToStr(Plan.Contains('Result: a table with 2 columns'), True) + '|' +
+        BoolToStr(Plan.Contains('1. Anchor (c:Producto): 3 candidates by label'), True) + '|' +
+        BoolToStr(Plan.Contains('Expand backwards from a (already bound): (p:Persona)-[:NO_LE_GUSTO]->(a:Acidez), 1 hop'), True) + '|' +
+        BoolToStr(Plan.Contains('OPTIONAL MATCH 1'), True) + '|' +
+        BoolToStr(Plan.Contains('RETURN: a.name, n; ORDER BY 1 key(s); LIMIT 3'), True) + '|' +
+        BoolToStr(Tab('EXPLAIN SHOW SCHEMA', []).Contains('Command SHOW SCHEMA'), True);
+    end
     else if Id = 'leak' then
     begin
       // Caminos, clones de valores, filas de OPTIONAL MATCH, tablas y errores de parseo:
@@ -5706,7 +5781,11 @@ begin
         'MATCH (c:Producto) WHERE lower(c.name) STARTS WITH ''hu'' AND c.precio * 2 > 1 RETURN c',
         'SHOW LABELS', 'GET DEGREES TOP 3', 'SHORTEST PATH (:Producto {name:''Huila Reserva''}) TO (:Tienda {name:''Cafe Norte''})',
         'MATCH (c:Producto) WHERE count(*) > 1', 'MATCH (c:Producto) WHERE c.name = ''abierta',
-        'MATCH (f:Finca)-[:PROVEE*3..1]->(t)', 'MATCH (c) WHERE foo(c.name) = 1'];
+        'MATCH (f:Finca)-[:PROVEE*3..1]->(t)', 'MATCH (c) WHERE foo(c.name) = 1',
+        'SHOW SCHEMA', 'SHOW PROPERTIES', 'GET COMMUNITIES', 'GET NEIGHBORS (:Finca) DEPTH 2', 'GET CENTRALITY TOP 3',
+        'ALL SHORTEST PATHS (:Producto {name:''Huila Reserva''}) TO (:Tienda {name:''Cafe Norte''})',
+        'MATCH (c:Producto) WHERE c SIMILAR TO ''chocolate'' RETURN c.name, similarity(c, ''frutal'') AS s',
+        'EXPLAIN MATCH (c:Producto) OPTIONAL MATCH (c)-[*1..2]->(x) RETURN count(x)'];
       var Code: string;
       var Fugas := '';
       for Code in Repertorio do
