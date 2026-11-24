@@ -47,7 +47,8 @@ type
     tkRank,      // RANK — campo de retorno extendido
     tkMmr,       // MMR  — modo de optimizacion
     tkModel,     // MODEL — campo de retorno extendido
-    tkTop        // TOP — alias de LIMIT (reservado)
+    tkTop,       // TOP — alias de LIMIT
+    tkSemicolon  // ';' final opcional
   );
 
   TVGQLToken = record
@@ -63,6 +64,7 @@ type
 
     function IsEOF: Boolean;
     function Peek: Char;
+    function PeekAt(AOffset: Integer): Char;
     function Next: Char;
     procedure SkipWhitespace;
 
@@ -154,12 +156,15 @@ TBinaryOperator = (
     FLeft: TExpression;
     FValues: TList<TExpression>;
     FIsNot: Boolean;
+    FListOp: TBinaryOperator;
   public
     constructor Create(APosition: Integer = 0); override;
     destructor Destroy; override;
     property Left: TExpression read FLeft write FLeft;
     property Values: TList<TExpression> read FValues;
-    property IsNot: Boolean read FIsNot write FIsNot; // True si es "NOT IN"
+    property IsNot: Boolean read FIsNot write FIsNot; // True si es "NOT IN" (o NOT EXISTS_ANY/ALL)
+    // boIn (campo IN (...)), boExistsAny / boExistsAll (lista del campo con alguno / todos)
+    property ListOp: TBinaryOperator read FListOp write FListOp;
   end;
 
   // Expresion para: campo BETWEEN min AND max
@@ -344,9 +349,11 @@ TBinaryOperator = (
     FCurrent: TVGQLToken;
 
     procedure Next;
-    procedure Expect(AKind: TVGQLTokenKind; const AMsg: string = '');
+    procedure Expect(AKind: TVGQLTokenKind);
     function Check(AKind: TVGQLTokenKind): Boolean;
     function Match(AKind: TVGQLTokenKind): Boolean;
+    // Nombre de campo: una palabra (tambien las reservadas: language, order, top...) y .partes
+    function ParseFieldName(const AErrorMsg: string): string;
 
     // Parsers de clausulas
     function ParseMatch: TMatchClause;
@@ -504,34 +511,86 @@ begin
     Result := FText[FPos];
 end;
 
+function TVGQLLexer.PeekAt(AOffset: Integer): Char;
+begin
+  if FPos + AOffset > Length(FText) then
+    Result := #0
+  else
+    Result := FText[FPos + AOffset];
+end;
+
 function TVGQLLexer.Next: Char;
 begin
   Result := Peek;
   Inc(FPos);
 end;
 
+// Espacios y comentarios: -- y // hasta el fin de la linea, /* ... */ en bloque
 procedure TVGQLLexer.SkipWhitespace;
-begin
-  while (not IsEOF) and Peek.IsWhiteSpace do
-    Next;
-end;
-
-function TVGQLLexer.ReadString: TVGQLToken;
 var
-  Quote: Char;
   Start: Integer;
 begin
-  Quote := Next; // ' o "
+  while not IsEOF do
+  begin
+    if Peek.IsWhiteSpace then
+      Next
+    else if ((Peek = '-') and (PeekAt(1) = '-')) or ((Peek = '/') and (PeekAt(1) = '/')) then
+    begin
+      while (not IsEOF) and (Peek <> #10) and (Peek <> #13) do
+        Next;
+    end
+    else if (Peek = '/') and (PeekAt(1) = '*') then
+    begin
+      Start := FPos;
+      Inc(FPos, 2);
+      while (not IsEOF) and not((Peek = '*') and (PeekAt(1) = '/')) do
+        Next;
+      if IsEOF then
+        raise EVGQLParserError.CreateFmt(AiStr('rag.vql.unclosed_comment'), [Start]);
+      Inc(FPos, 2);
+    end
+    else
+      Break;
+  end;
+end;
+
+// Texto entre '...' o "...". La comilla se repite para escribirla: 'O''Brien'. La barra
+// invertida es un caracter mas (rutas como 'C:\docs\nuevo' llegan tal cual; en LIKE sigue
+// escapando % y _). Antes no habia forma de escribir una comilla y una cadena sin cerrar se
+// aceptaba hasta el final de la consulta
+function TVGQLLexer.ReadString: TVGQLToken;
+var
+  Quote, C: Char;
+  Start: Integer;
+  SB: TStringBuilder;
+begin
   Start := FPos;
-  while (not IsEOF) and (Peek <> Quote) do
-    Next;
-
-  Result.Kind := tkString;
-  Result.Text := Copy(FText, Start, FPos - Start);
-  Result.Position := Start - 1;
-
-  if not IsEOF then
-    Next; // cerrar comilla
+  Quote := Next;
+  SB := TStringBuilder.Create;
+  try
+    while True do
+    begin
+      if IsEOF then
+        raise EVGQLParserError.CreateFmt(AiStr('rag.vql.unclosed_string'), [Start]);
+      C := Next;
+      if C = Quote then
+      begin
+        if Peek = Quote then
+        begin
+          Next;
+          SB.Append(Quote);
+          Continue;
+        end;
+        Break;
+      end;
+      SB.Append(C);
+    end;
+    Result.Kind := tkString;
+    Result.Text := SB.ToString;
+    Result.Position := Start;
+  finally
+    SB.Free;
+  end;
 end;
 
 function TVGQLLexer.ReadNumber: TVGQLToken;
@@ -541,6 +600,8 @@ var
 begin
   Start := FPos;
   HasDot := False;
+  if Peek = '-' then
+    Next; // negativo: -5, -0.25
   while not IsEOF do
   begin
     if Peek.IsDigit then
@@ -671,45 +732,56 @@ begin
   end;
 
   case Peek of
-
     '(':
-      Begin
+      begin
         Next;
         Result.Kind := tkLParen;
-        Result.Text := '('
+        Result.Text := '(';
       end;
-
     ')':
-      Begin
+      begin
         Next;
         Result.Kind := tkRParen;
-        Result.Text := ')'
+        Result.Text := ')';
       end;
     ':':
-      Begin
+      begin
         Next;
         Result.Kind := tkColon;
-        Result.Text := ':'
+        Result.Text := ':';
       end;
     ',':
-      Begin
+      begin
         Next;
         Result.Kind := tkComma;
-        Result.Text := ','
+        Result.Text := ',';
       end;
     '.':
-      Begin
+      begin
         Next;
         Result.Kind := tkDot;
-        Result.Text := '.'
+        Result.Text := '.';
+      end;
+    ';':
+      begin
+        Next;
+        Result.Kind := tkSemicolon;
+        Result.Text := ';';
       end;
     '=':
-      Begin
+      begin
         Next;
         Result.Kind := tkEqual;
-        Result.Text := '='
+        Result.Text := '=';
       end;
-
+    '!':
+      begin
+        if PeekAt(1) <> '=' then
+          raise EVGQLParserError.CreateFmt(AiStr('rag.vql.lex_error'), [Peek, FPos]);
+        Inc(FPos, 2);
+        Result.Kind := tkNotEqual; // != como <>
+        Result.Text := '!=';
+      end;
     '<':
       begin
         Next;
@@ -726,8 +798,10 @@ begin
           Result.Text := '<=';
         end
         else
+        begin
           Result.Kind := tkLess;
-        Result.Text := '<';
+          Result.Text := '<';
+        end;
       end;
     '>':
       begin
@@ -739,18 +813,25 @@ begin
           Result.Text := '>=';
         end
         else
+        begin
           Result.Kind := tkGreater;
-        Result.Text := '>';
+          Result.Text := '>';
+        end;
       end;
     '''', '"':
       Exit(ReadString);
     '0' .. '9':
       Exit(ReadNumber);
+    '-':
+      if PeekAt(1).IsDigit then
+        Exit(ReadNumber)
+      else
+        raise EVGQLParserError.CreateFmt(AiStr('rag.vql.lex_error'), [Peek, FPos]);
   else
     if Peek.IsLetter or (Peek = '_') then
       Exit(ReadIdentifier)
     else
-      raise Exception.CreateFmt(AiStr('rag.gql.lex_error'), [Peek, FPos]);
+      raise EVGQLParserError.CreateFmt(AiStr('rag.vql.lex_error'), [Peek, FPos]);
   end;
 end;
 
@@ -884,6 +965,7 @@ begin
   inherited Create(APosition);
   FValues := TList<TExpression>.Create;
   FIsNot := False;
+  FListOp := boIn;
 end;
 
 destructor TInExpression.Destroy;
@@ -944,103 +1026,202 @@ begin
     Next;
 end;
 
-procedure TVGQLParser.Expect(AKind: TVGQLTokenKind; const AMsg: string);
+const
+  // Palabras que valen como nombre de campo: los identificadores y las palabras de clausula
+  // (WHERE language = 'es', ORDER BY top). No los operadores ni los literales
+  VQL_WORD_TOKENS = [tkIdentifier, tkMatch, tkSearch, tkUsing, tkWhere, tkRerank, tkThreshold, tkOptimize, tkReturn,
+    tkWith, tkLimit, tkHybrid, tkEmbeddings, tkBm25, tkWeights, tkLanguage, tkFusion, tkRrf, tkWeighted, tkRegenerate,
+    tkGlobal, tkSemantic, tkLexical, tkReorder, tkAbc, tkText, tkMetadata, tkScore, tkOffset, tkDistinct, tkOn,
+    tkOrder, tkBy, tkAsc, tkDesc, tkExplain, tkId, tkRank, tkMmr, tkModel, tkTop];
+
+// Como se nombra un token en un mensaje de error
+function VqlTokenDisplay(AKind: TVGQLTokenKind): string;
+begin
+  case AKind of
+    tkEOF:
+      Result := AiStr('rag.vql.end_of_query');
+    tkIdentifier:
+      Result := AiStr('rag.vql.a_name');
+    tkString:
+      Result := AiStr('rag.vql.a_string');
+    tkNumber:
+      Result := AiStr('rag.vql.a_number');
+    tkLParen:
+      Result := '"("';
+    tkRParen:
+      Result := '")"';
+    tkColon:
+      Result := '":"';
+    tkComma:
+      Result := '","';
+    tkDot:
+      Result := '"."';
+    tkSemicolon:
+      Result := '";"';
+    tkEqual:
+      Result := '"="';
+    tkNotEqual:
+      Result := '"<>"';
+    tkGreater:
+      Result := '">"';
+    tkGreaterEqual:
+      Result := '">="';
+    tkLess:
+      Result := '"<"';
+    tkLessEqual:
+      Result := '"<="';
+    tkStartsWith:
+      Result := 'STARTS_WITH';
+    tkEndsWith:
+      Result := 'ENDS_WITH';
+    tkExistsAny:
+      Result := 'EXISTS_ANY';
+    tkExistsAll:
+      Result := 'EXISTS_ALL';
+  else
+    Result := UpperCase(Copy(GetEnumName(TypeInfo(TVGQLTokenKind), Ord(AKind)), 3, MaxInt));
+  end;
+end;
+
+procedure TVGQLParser.Expect(AKind: TVGQLTokenKind);
 var
-  ErrorMsg: string;
+  Found: string;
 begin
   if not Check(AKind) then
   begin
-    if AMsg <> '' then
-      ErrorMsg := Format('Linea %d: se esperaba %s (%s)', [FCurrent.Position, GetEnumName(TypeInfo(TVGQLTokenKind), Ord(AKind)), AMsg])
+    if FCurrent.Kind in [tkEOF, tkString] then
+      Found := VqlTokenDisplay(FCurrent.Kind)
     else
-      ErrorMsg := Format('Linea %d: se esperaba %s', [FCurrent.Position, GetEnumName(TypeInfo(TVGQLTokenKind), Ord(AKind))]);
-    raise EVGQLParserError.Create(ErrorMsg);
+      Found := '"' + FCurrent.Text + '"';
+    raise EVGQLParserError.CreateFmt(AiStr('rag.vql.expected'), [VqlTokenDisplay(AKind), FCurrent.Position, Found]);
   end;
   Next;
 end;
 
+function TVGQLParser.ParseFieldName(const AErrorMsg: string): string;
+begin
+  if not(FCurrent.Kind in VQL_WORD_TOKENS) then
+    raise EVGQLParserError.Create(AErrorMsg);
+  Result := FCurrent.Text;
+  Next;
+  while Check(tkDot) do
+  begin
+    Next;
+    if not(FCurrent.Kind in VQL_WORD_TOKENS) then
+      raise EVGQLParserError.CreateFmt(AiStr('rag.vql.name_expected'), [FCurrent.Position]);
+    Result := Result + '.' + FCurrent.Text;
+    Next;
+  end;
+end;
+
 { ===== PARSER PRINCIPAL ===== }
 
+// EXPLAIN y MATCH van primero y SEARCH es obligatorio; las demas clausulas van en cualquier
+// orden y una vez cada una (antes el orden era fijo: un RETURN antes del ORDER BY, lo que un
+// modelo escribe a menudo, era error). ';' final opcional
 function TVGQLParser.Parse: TVGQLQuery;
 var
   N: Integer;
+  LimitSeen, OffsetSeen: Boolean;
+
+  procedure CheckOnce(AAlreadySeen: Boolean);
+  begin
+    if AAlreadySeen then
+      raise EVGQLParserError.CreateFmt(AiStr('rag.vql.duplicate_clause'), [UpperCase(FCurrent.Text), FCurrent.Position]);
+  end;
+
 begin
   Result := TVGQLQuery.Create;
+  LimitSeen := False;
+  OffsetSeen := False;
   try
-    // EXPLAIN (opcional, debe ir primero)
     if Match(tkExplain) then
       Result.Explain := True;
 
-    // MATCH (opcional)
     if Check(tkMatch) then
       Result.Match := ParseMatch;
 
-    // SEARCH (obligatorio)
     if Check(tkSearch) then
       Result.Search := ParseSearch
     else
       raise EVGQLParserError.Create(AiStr('rag.vql.search_required'));
 
-    // USING (opcional)
-    if Check(tkUsing) then
-      Result.UsingClause := ParseUsing;
-
-    // WHERE (opcional)
-    if Check(tkWhere) then
-      Result.WhereClause := ParseWhere;
-
-    // RERANK (opcional)
-    if Check(tkRerank) then
-      Result.RerankClause := ParseRerank;
-
-    // THRESHOLD (opcional)
-    if Check(tkThreshold) then
-      Result.ThresholdClause := ParseThreshold;
-
-    // OPTIMIZE (opcional)
-    if Check(tkOptimize) then
-      Result.OptimizeClause := ParseOptimize;
-
-    // DISTINCT ON campo (opcional)
-    if Check(tkDistinct) then
-      Result.DistinctClause := ParseDistinct;
-
-    // ORDER BY (opcional)
-    if Check(tkOrder) then
-      Result.OrderByClause := ParseOrderBy;
-
-    // RETURN (opcional)
-    if Check(tkReturn) then
-      Result.ReturnClause := ParseReturn;
-
-    // LIMIT (opcional)
-    if Match(tkLimit) then
-    begin
-      // Entero mayor que 0. Antes LIMIT 0 se ignoraba (y salian 10) y LIMIT 1.5 reventaba con
-      // un EConvertError
-      if Check(tkNumber) and TryStrToInt(FCurrent.Text, N) and (N > 0) then
-      begin
-        Result.Limit := N;
-        Next;
-      end
+    while not(FCurrent.Kind in [tkEOF, tkSemicolon]) do
+      case FCurrent.Kind of
+        tkUsing:
+          begin
+            CheckOnce(Assigned(Result.UsingClause));
+            Result.UsingClause := ParseUsing;
+          end;
+        tkWhere:
+          begin
+            CheckOnce(Assigned(Result.WhereClause));
+            Result.WhereClause := ParseWhere;
+          end;
+        tkRerank:
+          begin
+            CheckOnce(Assigned(Result.RerankClause));
+            Result.RerankClause := ParseRerank;
+          end;
+        tkThreshold:
+          begin
+            CheckOnce(Assigned(Result.ThresholdClause));
+            Result.ThresholdClause := ParseThreshold;
+          end;
+        tkOptimize:
+          begin
+            CheckOnce(Assigned(Result.OptimizeClause));
+            Result.OptimizeClause := ParseOptimize;
+          end;
+        tkDistinct:
+          begin
+            CheckOnce(Assigned(Result.DistinctClause));
+            Result.DistinctClause := ParseDistinct;
+          end;
+        tkOrder:
+          begin
+            CheckOnce(Assigned(Result.OrderByClause));
+            Result.OrderByClause := ParseOrderBy;
+          end;
+        tkReturn:
+          begin
+            CheckOnce(Assigned(Result.ReturnClause));
+            Result.ReturnClause := ParseReturn;
+          end;
+        tkLimit, tkTop:
+          begin
+            // LIMIT n o TOP n: entero mayor que 0. Antes LIMIT 0 se ignoraba (y salian 10)
+            CheckOnce(LimitSeen);
+            LimitSeen := True;
+            Next;
+            if Check(tkNumber) and TryStrToInt(FCurrent.Text, N) and (N > 0) then
+            begin
+              Result.Limit := N;
+              Next;
+            end
+            else
+              raise EVGQLParserError.Create(AiStr('rag.vql.limit_number'));
+          end;
+        tkOffset:
+          begin
+            // OFFSET n: paginacion; entero, 0 o mas
+            CheckOnce(OffsetSeen);
+            OffsetSeen := True;
+            Next;
+            if Check(tkNumber) and TryStrToInt(FCurrent.Text, N) and (N >= 0) then
+            begin
+              Result.Offset := N;
+              Next;
+            end
+            else
+              raise EVGQLParserError.Create(AiStr('rag.vql.offset_number'));
+          end;
       else
-        raise EVGQLParserError.Create(AiStr('rag.vql.limit_number'));
-    end;
+        raise EVGQLParserError.CreateFmt(AiStr('rag.vql.unexpected_clause'), [FCurrent.Text, FCurrent.Position]);
+      end;
 
-    // OFFSET (opcional) — paginacion; entero, 0 o mas
-    if Match(tkOffset) then
-    begin
-      if Check(tkNumber) and TryStrToInt(FCurrent.Text, N) and (N >= 0) then
-      begin
-        Result.Offset := N;
-        Next;
-      end
-      else
-        raise EVGQLParserError.Create(AiStr('rag.vql.offset_number'));
-    end;
-
-    // Verificar fin de consulta
-    Expect(tkEOF, 'fin de consulta');
+    Match(tkSemicolon);
+    Expect(tkEOF);
   except
     Result.Free;
     raise;
@@ -1054,7 +1235,7 @@ begin
   Result := TMatchClause.Create(FCurrent.Position);
   try
     Next; // consumir MATCH
-    Expect(tkLParen, '(');
+    Expect(tkLParen);
 
     if Check(tkIdentifier) then
     begin
@@ -1062,7 +1243,7 @@ begin
       Next;
     end
     else
-      Expect(tkIdentifier, 'nombre de entidad');
+      Expect(tkIdentifier);
 
     // Alias opcional
     if Match(tkColon) then
@@ -1073,10 +1254,10 @@ begin
         Next;
       end
       else
-        Expect(tkIdentifier, 'alias');
+        Expect(tkIdentifier);
     end;
 
-    Expect(tkRParen, ')');
+    Expect(tkRParen);
   except
     Result.Free;
     raise;
@@ -1096,7 +1277,7 @@ begin
       Next; // Avanzar
     end
     else
-      Expect(tkString, 'texto de busqueda');
+      Expect(tkString);
   except
     Result.Free;
     raise;
@@ -1200,43 +1381,47 @@ begin
   Result := ParseOr;
 end;
 
+// Los niveles de expresion liberan lo ya armado si la parte siguiente falla (antes una
+// consulta con error dejaba nodos del arbol vivos: memoria perdida en un servidor de vida larga)
 function TVGQLParser.ParseOr: TExpression;
 var
-  Left, Right: TExpression;
   BinExpr: TBinaryExpression;
 begin
-  Left := ParseAnd;
-  Result := Left;
-
-  while Match(tkOr) do
+  Result := ParseAnd;
+  while Check(tkOr) do
   begin
-    Right := ParseAnd;
-    BinExpr := TBinaryExpression.Create;
-    BinExpr.Left := Left;
+    BinExpr := TBinaryExpression.Create(FCurrent.Position);
+    BinExpr.Left := Result;
     BinExpr.Operator := boOr;
-    BinExpr.Right := Right;
     Result := BinExpr;
-    Left := Result;
+    Next;
+    try
+      BinExpr.Right := ParseAnd;
+    except
+      Result.Free;
+      raise;
+    end;
   end;
 end;
 
 function TVGQLParser.ParseAnd: TExpression;
 var
-  Left, Right: TExpression;
   BinExpr: TBinaryExpression;
 begin
-  Left := ParseNot;
-  Result := Left;
-
-  while Match(tkAnd) do
+  Result := ParseNot;
+  while Check(tkAnd) do
   begin
-    Right := ParseNot;
-    BinExpr := TBinaryExpression.Create;
-    BinExpr.Left := Left;
+    BinExpr := TBinaryExpression.Create(FCurrent.Position);
+    BinExpr.Left := Result;
     BinExpr.Operator := boAnd;
-    BinExpr.Right := Right;
     Result := BinExpr;
-    Left := Result;
+    Next;
+    try
+      BinExpr.Right := ParseNot;
+    except
+      Result.Free;
+      raise;
+    end;
   end;
 end;
 
@@ -1263,7 +1448,7 @@ end;
 
 function TVGQLParser.ParseComparison: TExpression;
 var
-  Left, Right, Min, Max: TExpression;
+  Left: TExpression;
   InExpr: TInExpression;
   BetExpr: TBetweenExpression;
   BinExpr: TBinaryExpression;
@@ -1272,33 +1457,34 @@ var
   NotPos: Integer;
 begin
   Left := ParsePrimary;
-  Result := Left;
 
-  // 1. Caso: IS [NOT] NULL
-  if Match(tkIs) then
+  // 1. IS [NOT] NULL
+  if Check(tkIs) then
   begin
-    IsNegated := Match(tkNot);
-    Expect(tkNull, 'NULL despues de IS');
-
-    BinExpr := TBinaryExpression.Create;
+    BinExpr := TBinaryExpression.Create(FCurrent.Position);
     BinExpr.Left := Left;
-    if IsNegated then
-      BinExpr.Operator := boIsNotNull
-    else
-      BinExpr.Operator := boIsNull;
-    BinExpr.Right := nil; // No necesita derecha
+    try
+      Next;
+      if Match(tkNot) then
+        BinExpr.Operator := boIsNotNull
+      else
+        BinExpr.Operator := boIsNull;
+      Expect(tkNull);
+    except
+      BinExpr.Free;
+      raise;
+    end;
     Exit(BinExpr);
   end;
 
   // 2. NOT pospuesto: NOT IN, NOT LIKE, NOT ILIKE, NOT BETWEEN, NOT CONTAINS, NOT STARTS_WITH,
-  // NOT ENDS_WITH. Antes el NOT solo valia delante de IN: en los demas se consumia y se perdia,
-  // y la consulta devolvia justo lo contrario de lo pedido
+  // NOT ENDS_WITH, NOT EXISTS_ANY, NOT EXISTS_ALL
   IsNegated := False;
   if Check(tkNot) then
   begin
     NotPos := FCurrent.Position;
     Next;
-    if not(FCurrent.Kind in [tkIn, tkBetween, tkLike, tkILike, tkContains, tkStartsWith, tkEndsWith]) then
+    if not(FCurrent.Kind in [tkIn, tkBetween, tkLike, tkILike, tkContains, tkStartsWith, tkEndsWith, tkExistsAny, tkExistsAll]) then
     begin
       Left.Free;
       raise EVGQLParserError.CreateFmt(AiStr('rag.vql.not_operator'), [NotPos]);
@@ -1306,37 +1492,53 @@ begin
     IsNegated := True;
   end;
 
-  if Match(tkIn) then
+  // 3. Listas: IN (...), EXISTS_ANY (...) y EXISTS_ALL (...) (campo con alguno / todos los valores)
+  if FCurrent.Kind in [tkIn, tkExistsAny, tkExistsAll] then
   begin
     InExpr := TInExpression.Create(FCurrent.Position);
     InExpr.Left := Left;
-    InExpr.IsNot := IsNegated;
-    Expect(tkLParen, '(');
-    repeat
-      InExpr.Values.Add(ParsePrimary);
-      if not Match(tkComma) then
-        Break;
-    until False;
-    Expect(tkRParen, ')');
+    try
+      case FCurrent.Kind of
+        tkExistsAny:
+          InExpr.ListOp := boExistsAny;
+        tkExistsAll:
+          InExpr.ListOp := boExistsAll;
+      else
+        InExpr.ListOp := boIn;
+      end;
+      InExpr.IsNot := IsNegated;
+      Next;
+      Expect(tkLParen);
+      repeat
+        InExpr.Values.Add(ParsePrimary);
+      until not Match(tkComma);
+      Expect(tkRParen);
+    except
+      InExpr.Free;
+      raise;
+    end;
     Exit(InExpr);
   end;
 
-  // 3. Caso: BETWEEN min AND max
-  if Match(tkBetween) then
+  // 4. BETWEEN min AND max
+  if Check(tkBetween) then
   begin
-    Min := ParsePrimary;
-    Expect(tkAnd, 'AND entre valores de BETWEEN');
-    Max := ParsePrimary;
-
-    BetExpr := TBetweenExpression.Create;
+    BetExpr := TBetweenExpression.Create(FCurrent.Position);
     BetExpr.Left := Left;
-    BetExpr.Min := Min;
-    BetExpr.Max := Max;
     BetExpr.Negated := IsNegated;
+    try
+      Next;
+      BetExpr.Min := ParsePrimary;
+      Expect(tkAnd);
+      BetExpr.Max := ParsePrimary;
+    except
+      BetExpr.Free;
+      raise;
+    end;
     Exit(BetExpr);
   end;
 
-  // 4. Caso: Operadores Binarios Estandar y Texto
+  // 5. Operadores binarios y de texto
   if FCurrent.Kind in [tkEqual, tkNotEqual, tkGreater, tkGreaterEqual, tkLess, tkLessEqual, tkContains, tkLike, tkILike, tkStartsWith, tkEndsWith] then
   begin
     case FCurrent.Kind of
@@ -1360,77 +1562,78 @@ begin
         Op := boILike;
       tkStartsWith:
         Op := boStartsWith;
-      tkEndsWith:
-        Op := boEndsWith;
     else
-      Op := boEqual;
+      Op := boEndsWith;
     end;
-
-    Next; // consumir operador
-    Right := ParsePrimary;
-
-    BinExpr := TBinaryExpression.Create;
+    BinExpr := TBinaryExpression.Create(FCurrent.Position);
     BinExpr.Left := Left;
     BinExpr.Operator := Op;
-    BinExpr.Right := Right;
     BinExpr.Negated := IsNegated;
-    Result := BinExpr;
+    try
+      Next;
+      BinExpr.Right := ParsePrimary;
+    except
+      BinExpr.Free;
+      raise;
+    end;
+    Exit(BinExpr);
   end;
+
+  Result := Left;
 end;
 
 function TVGQLParser.ParsePrimary: TExpression;
 var
   LitExpr: TLiteralExpression;
   IdExpr: TIdentifierExpression;
-  FullName: string;
+  BinExpr: TBinaryExpression;
+  P: Integer;
 begin
+  // EXISTS(campo): la clave esta, aunque su valor sea null
+  if Check(tkExists) then
+  begin
+    P := FCurrent.Position;
+    Next;
+    IdExpr := TIdentifierExpression.Create(P);
+    try
+      Expect(tkLParen);
+      IdExpr.Name := ParseFieldName(AiFmt('rag.vql.name_expected', [FCurrent.Position]));
+      Expect(tkRParen);
+    except
+      IdExpr.Free;
+      raise;
+    end;
+    BinExpr := TBinaryExpression.Create(P);
+    BinExpr.Left := IdExpr;
+    BinExpr.Operator := boExists;
+    Exit(BinExpr);
+  end;
+
+  // Nombre de campo, tambien con palabras reservadas (language, order...) y con puntos
+  if FCurrent.Kind in VQL_WORD_TOKENS then
+  begin
+    IdExpr := TIdentifierExpression.Create(FCurrent.Position);
+    try
+      IdExpr.Name := ParseFieldName(AiFmt('rag.vql.name_expected', [FCurrent.Position]));
+    except
+      IdExpr.Free;
+      raise;
+    end;
+    Exit(IdExpr);
+  end;
+
   case FCurrent.Kind of
-
-    // Identificadores y palabras que pueden usarse como nombre de campo
-    tkIdentifier, tkText, tkMetadata, tkScore, tkId, tkRank, tkModel:
+    tkString, tkNumber, tkBoolean:
       begin
-        FullName := FCurrent.Text;
-        Next;
-
-        while Match(tkDot) do
-        begin
-          // Tambien permitimos palabras reservadas despues de un punto (ej: meta.text)
-          if FCurrent.Kind in [tkIdentifier, tkText, tkMetadata, tkScore, tkId, tkRank, tkModel] then
-          begin
-            FullName := FullName + '.' + FCurrent.Text;
-            Next;
-          end
-          else
-            raise EVGQLParserError.CreateFmt(AiStr('rag.vql.name_expected'), [FCurrent.Position]);
+        LitExpr := TLiteralExpression.Create(FCurrent.Position);
+        case FCurrent.Kind of
+          tkString:
+            LitExpr.LiteralType := ltString;
+          tkNumber:
+            LitExpr.LiteralType := ltNumber;
+        else
+          LitExpr.LiteralType := ltBoolean;
         end;
-
-        IdExpr := TIdentifierExpression.Create;
-        IdExpr.Name := FullName;
-        Result := IdExpr;
-      end;
-
-    tkString:
-      begin
-        LitExpr := TLiteralExpression.Create;
-        LitExpr.LiteralType := ltString;
-        LitExpr.Value := FCurrent.Text;
-        Next;
-        Result := LitExpr;
-      end;
-
-    tkNumber:
-      begin
-        LitExpr := TLiteralExpression.Create;
-        LitExpr.LiteralType := ltNumber;
-        LitExpr.Value := FCurrent.Text;
-        Next;
-        Result := LitExpr;
-      end;
-
-    tkBoolean:
-      begin
-        LitExpr := TLiteralExpression.Create;
-        LitExpr.LiteralType := ltBoolean;
         LitExpr.Value := FCurrent.Text;
         Next;
         Result := LitExpr;
@@ -1438,7 +1641,7 @@ begin
 
     tkNull:
       begin
-        LitExpr := TLiteralExpression.Create;
+        LitExpr := TLiteralExpression.Create(FCurrent.Position);
         LitExpr.LiteralType := ltNull;
         LitExpr.Value := 'NULL';
         Next;
@@ -1449,7 +1652,12 @@ begin
       begin
         Next; // consumir (
         Result := ParseExpression;
-        Expect(tkRParen, ')');
+        try
+          Expect(tkRParen);
+        except
+          Result.Free;
+          raise;
+        end;
       end;
   else
     raise EVGQLParserError.CreateFmt(AiStr('rag.vql.invalid_expr'), [FCurrent.Position, FCurrent.Text]);
@@ -1473,7 +1681,7 @@ begin
     else
     begin
       // Si quieres que el string sea obligatorio:
-      Expect(tkString, 'texto para rerank');
+      Expect(tkString);
 
       // NOTA: Si quisieras que el string fuera OPCIONAL (para usar la query original),
       // simplemente quitarias el 'else' y el 'Expect'.
@@ -1541,13 +1749,13 @@ begin
           Result.Lambda := StrToFloat(FCurrent.Text, TFormatSettings.Invariant);
           Next;
         end;
-        Expect(tkRParen, ')');
+        Expect(tkRParen);
       end;
     end
     // REORDER ABC — optimizacion de ventana de contexto LLM
     else if Match(tkReorder) then
     begin
-      Expect(tkAbc, 'ABC');
+      Expect(tkAbc);
       Result.Mode := omReorderABC;
     end
     else
@@ -1584,9 +1792,7 @@ begin
         tkModel:
           Result.Fields.Add(rfModel);
       else
-        raise EVGQLParserError.CreateFmt(
-          'Campo RETURN invalido en posicion %d. Use: TEXT, METADATA, SCORE, ID, RANK o MODEL',
-          [FCurrent.Position]);
+        raise EVGQLParserError.CreateFmt(AiStr('rag.vql.return_invalid'), [FCurrent.Position]);
       end;
       Next;
 
@@ -1609,16 +1815,9 @@ begin
   Result := TDistinctClause.Create(FCurrent.Position);
   try
     Next; // consumir DISTINCT
-    Expect(tkOn, 'ON despues de DISTINCT');
+    Expect(tkOn);
 
-    // El campo puede ser un identificador o un token de retorno usado como campo
-    if FCurrent.Kind in [tkIdentifier, tkText, tkMetadata, tkScore, tkId, tkRank, tkModel] then
-    begin
-      Result.Field := FCurrent.Text;
-      Next;
-    end
-    else
-      raise EVGQLParserError.CreateFmt(AiStr('rag.vql.distinct_field'), [FCurrent.Position]);
+    Result.Field := ParseFieldName(AiFmt('rag.vql.distinct_field', [FCurrent.Position]));
   except
     Result.Free;
     raise;
@@ -1634,18 +1833,11 @@ begin
   Result := TOrderByClause.Create(FCurrent.Position);
   try
     Next; // consumir ORDER
-    Expect(tkBy, 'BY despues de ORDER');
+    Expect(tkBy);
 
     // Parsear lista de campos: campo1 [ASC|DESC], campo2 [ASC|DESC], ...
     repeat
-      // Nombre del campo
-      if FCurrent.Kind in [tkIdentifier, tkText, tkMetadata, tkScore, tkId, tkRank, tkModel] then
-      begin
-        OBField.FieldName := FCurrent.Text;
-        Next;
-      end
-      else
-        raise EVGQLParserError.CreateFmt(AiStr('rag.vql.order_field'), [FCurrent.Position]);
+      OBField.FieldName := ParseFieldName(AiFmt('rag.vql.order_field', [FCurrent.Position]));
 
       // Direccion opcional (por defecto ASC)
       if Match(tkDesc) then
@@ -1926,10 +2118,20 @@ begin
     for i := 0 to InExp.Values.Count - 1 do
       VArray[i] := GetLiteralValue(InExp.Values[i]);
 
-    if InExp.IsNot then
-      ACriteria.Add(FieldName, foNotIn, VArray)
+    case InExp.ListOp of
+      boExistsAny:
+        FOp := foExistsAny;
+      boExistsAll:
+        FOp := foExistsAll;
     else
-      ACriteria.AddIn(FieldName, VArray);
+      FOp := foIn;
+    end;
+    if InExp.IsNot and (FOp = foIn) then
+      ACriteria.Add(FieldName, foNotIn, VArray)
+    else if InExp.IsNot then
+      ACriteria.AddNot(FieldName, FOp, VArray)
+    else
+      ACriteria.Add(FieldName, FOp, VArray);
   end
 
   // 4. COMPARACIONES BINARIAS ESTANDAR
@@ -1968,11 +2170,13 @@ begin
         FOp := foIsNull;
       boIsNotNull:
         FOp := foIsNotNull;
+      boExists:
+        FOp := foExists;
     else
       raise EVGQLTranslationError.Create(AiStr('rag.vql.condition_expected'));
     end;
 
-    if FOp in [foIsNull, foIsNotNull] then
+    if FOp in [foIsNull, foIsNotNull, foExists] then
       V := Null
     else
       V := GetLiteralValue(Bin.Right);

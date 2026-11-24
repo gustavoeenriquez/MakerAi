@@ -1236,6 +1236,9 @@ begin
     List.Free;
   FInvertedIndex.Free;
   FDocLengths.Free;
+  // Antes no se liberaba: cada TAiRAGVector trae su indice BM25, y cada Search crea un
+  // TAiRAGVector para el resultado, asi que toda busqueda perdia memoria
+  FStopWords.Free;
   inherited;
 end;
 

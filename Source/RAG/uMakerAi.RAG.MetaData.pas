@@ -249,7 +249,7 @@ var
   D: Double;
   IsNum: Boolean;
 begin
-  if VarIsNull(V) or VarIsEmpty(V) then
+  if VarIsNull(V) or VarIsEmpty(V) or VarIsArray(V) then
     Exit('');
   if (not AiIsTextType(V)) and (not AiIsIntType(V)) and AiTryNumber(V, D, IsNum) and IsNum then
     Exit(FloatToStr(D, TFormatSettings.Invariant));
@@ -741,7 +741,15 @@ begin
   if Op in [foLike, foILike] then
     Exit(AiLikeMatch(AiFilterValueToText(PropValue), AiFilterValueToText(Value), Op = foILike));
 
-  // 6. Texto parcial, sin distinguir mayúsculas
+  // 6. Texto parcial, sin distinguir mayúsculas. Sobre una lista (tags: ['a', 'b']) CONTAINS es
+  // pertenencia: el valor está en la lista (antes VarToStr de un arreglo lanzaba excepción)
+  if VarIsArray(PropValue) then
+  begin
+    if Op = foContains then
+      Exit(CheckInList(Value, PropValue, False));
+    if Op in [foStartsWith, foEndsWith] then
+      Exit(False);
+  end;
   case Op of
     foContains:
       Exit(ContainsText(AiFilterValueToText(PropValue), AiFilterValueToText(Value)));

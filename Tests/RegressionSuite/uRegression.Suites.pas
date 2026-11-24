@@ -554,6 +554,29 @@ begin
     .Input('rag:vql:options')
     .ExpectEquals('rrf=True|bm25=False|min=0.3|abc=False|entidad=propia|score=1');
 
+  // VQL fase 2 (nov 24/2026): sintaxis. Antes no habia forma de escribir una comilla, un
+  // negativo, ';' o un comentario; 'WHERE language = ...' era error (palabra reservada);
+  // EXISTS/EXISTS_ANY/EXISTS_ALL tenian palabra pero el parser no las aceptaba; el orden de
+  // las clausulas era fijo; los mensajes estaban escritos a mano en espanol y una consulta
+  // con error dejaba nodos del arbol vivos
+  FRunner.AddCase('rag.vql.syntax')
+    .Input('rag:vql:syntax')
+    .ExpectEquals('O''Brien|O''Brien|O''Brien|O''Brien|Ana,O''Brien|O''Brien|O''Brien||O''Brien|O''Brien|Dario|' +
+      'carla,Ana,O''Brien|Ana|O''Brien|O''Brien');
+
+  FRunner.AddCase('rag.vql.syntax-errors')
+    .Input('rag:vql:syntax-errors')
+    .ExpectEquals('error|error|error|error|error|error|error|error');
+
+  FRunner.AddCase('rag.vql.messages')
+    .Input('rag:vql:messages')
+    .ExpectEquals('Expected ")" at position 36, found the end of the query|LIMIT appears twice (position 20)|' +
+      'Text starting at position 27 is not closed (to write a quote inside, repeat it: ''O''''Brien'')');
+
+  FRunner.AddCase('rag.vql.no-leak')
+    .Input('rag:vql:no-leak')
+    .ExpectEquals('bloques=0');
+
   FRunner.AddCase('rag.search.nil-options')
     .Input('rag:search-nil-options')
     .ExpectEquals('1');
@@ -5726,9 +5749,24 @@ var
     end;
   end;
 
+  function Msg(const AVql: string): string;
+  begin
+    Result := 'sin error';
+    try
+      V.ExecuteVQL(AVql);
+    except
+      on E: Exception do
+        Result := E.Message;
+    end;
+  end;
+
 var
   SavedDecimal: Char;
-  SavedEntidad, Txt: string;
+  SavedEntidad, Txt, Fugas: string;
+  M: TAiEmbeddingMetaData;
+  K, I: Integer;
+  A, B, C: Int64;
+  Repertorio: TArray<string>;
 begin
   Id := AScenario.Substring(Length('rag:vql:'));
   Handlers := TFixtureHandlers.Create;
@@ -5809,6 +5847,97 @@ begin
       finally
         FormatSettings.DecimalSeparator := SavedDecimal;
       end;
+    end
+
+    else if Id = 'syntax' then
+    begin
+      // Fase 2: comillas dobladas, negativos, comentarios, ';', '!=', palabras reservadas como
+      // campo (language, order), EXISTS / EXISTS_ANY / EXISTS_ALL, CONTAINS sobre una lista,
+      // TOP, clausulas en cualquier orden y la barra invertida como caracter comun
+      M := TAiEmbeddingMetaData.Create;
+      try
+        M['autor'] := 'O''Brien';
+        M['estado'] := 'activo';
+        M['codigo'] := '-3';
+        M['precio'] := -5;
+        M['language'] := 'es';
+        M['tags'] := VarArrayOf(['cafe', 'te']);
+        M['ruta'] := 'C:\docs\nuevo';
+        V.AddItem('cinco', M);
+      finally
+        M.Free;
+      end;
+      Result := All([
+        'SEARCH ''x'' WHERE autor = ''O''''Brien''',
+        'SEARCH "x" WHERE autor = "O''Brien"',
+        'SEARCH ''x'' WHERE precio < -1',
+        'SEARCH ''x'' WHERE language = ''es'' AND order IS NULL',
+        'SEARCH ''x'' WHERE estado <> ''borrador'' AND precio != 300',
+        'SEARCH ''x'' /* bloque */ WHERE tags CONTAINS ''te'' // fin',
+        'SEARCH ''x'' -- comentario' + #10 + 'WHERE tags EXISTS_ANY (''te'', ''mate'')',
+        'SEARCH ''x'' WHERE tags EXISTS_ALL (''te'', ''mate'')',
+        'SEARCH ''x'' WHERE tags NOT EXISTS_ALL (''te'', ''mate'')',
+        'SEARCH ''x'' WHERE EXISTS(language)',
+        'SEARCH ''x'' WHERE NOT EXISTS(estado)',
+        '>SEARCH ''x'' ORDER BY precio DESC WHERE estado = ''activo'' RETURN TEXT;',
+        'SEARCH ''x'' TOP 1 WHERE autor = ''Ana''',
+        'SEARCH ''x'' WHERE ruta = ''C:\docs\nuevo''',
+        'SEARCH ''x'' WHERE codigo < 0']);
+    end
+
+    else if Id = 'syntax-errors' then
+      Result := All([
+        'SEARCH ''abc',
+        'SEARCH ''x'' /* sin cerrar',
+        'SEARCH ''x'' LIMIT 2 TOP 3',
+        'SEARCH ''x'' WHERE estado = ''a'' WHERE precio = 2',
+        'SEARCH ''x'' FOO',
+        'SEARCH ''x'' WHERE precio = 1 #',
+        'SEARCH ''x'' WHERE precio = 1; LIMIT 2',
+        'SEARCH ''x'' WHERE tags EXISTS_ANY ''te'''])
+
+    else if Id = 'messages' then
+      // La suite corre en ingles: mensajes de uMakerAi.Lang.En
+      Result := Msg('SEARCH ''x'' WHERE (estado = ''activo''') + '|' +
+        Msg('SEARCH ''x'' LIMIT 2 LIMIT 3') + '|' +
+        Msg('SEARCH ''x'' WHERE estado = ''act')
+
+    else if Id = 'no-leak' then
+    begin
+      // Una consulta con error a mitad del arbol no debe dejar nodos vivos (antes ParseOr,
+      // ParseAnd, ParseComparison y los parentesis perdian lo ya armado)
+      Repertorio := [
+        'SEARCH ''x'' WHERE (estado = ''a'' AND precio IN (1, 2',
+        'SEARCH ''x'' WHERE precio BETWEEN 1',
+        'SEARCH ''x'' WHERE NOT (estado = ''a'' OR',
+        'SEARCH ''x'' WHERE estado NOT = ''a''',
+        'SEARCH ''x'' WHERE EXISTS(estado',
+        'SEARCH ''x'' WHERE estado = ''a'' AND',
+        'SEARCH ''x'' ORDER BY codigo, LIMIT 2',
+        'SEARCH ''x'' WHERE estado = ''a'' RETURN FOO',
+        'SEARCH ''x'' WHERE estado',
+        'SEARCH ''abc',
+        'SEARCH ''x'' WHERE NOT (estado = ''activo'' OR precio > 250) AND codigo IN (''9'', ''10'') ORDER BY codigo DESC LIMIT 3',
+        'SEARCH ''x'' WHERE estado NOT LIKE ''b%'' AND precio NOT BETWEEN 1 AND 2 DISTINCT ON estado OFFSET 1'];
+      for K := 0 to High(Repertorio) do
+        Msg(Repertorio[K]);
+      Fugas := '';
+      for K := 0 to High(Repertorio) do
+      begin
+        A := LiveMemoryBlocks;
+        for I := 1 to 10 do
+          Msg(Repertorio[K]);
+        B := LiveMemoryBlocks;
+        for I := 1 to 10 do
+          Msg(Repertorio[K]);
+        C := LiveMemoryBlocks;
+        if (B - A >= 10) and (C - B >= 10) then
+          Fugas := Fugas + Format(' q%d=%d+%d', [K, B - A, C - B]);
+      end;
+      if Fugas = '' then
+        Result := 'bloques=0'
+      else
+        Result := 'fugas:' + Fugas;
     end
 
     else if Id = 'options' then
