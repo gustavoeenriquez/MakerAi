@@ -564,6 +564,12 @@ begin
     .ExpectEquals('O''Brien|O''Brien|O''Brien|O''Brien|Ana,O''Brien|O''Brien|O''Brien||O''Brien|O''Brien|Dario|' +
       'carla,Ana,O''Brien|Ana|O''Brien|O''Brien');
 
+  // VQL fase 3 (nov 24/2026): parametros $x en SEARCH, WHERE, IN, BETWEEN, LIMIT y MATCH
+  FRunner.AddCase('rag.vql.params')
+    .Input('rag:vql:params')
+    .ExpectEquals('Ana||Ana,Bruno|carla,Dario|Bruno,carla,Dario|Dario|Ana,Bruno,carla,Dario|Ana|' +
+      'error|error|error|error|error|Ana|Ana');
+
   FRunner.AddCase('rag.vql.syntax-errors')
     .Input('rag:vql:syntax-errors')
     .ExpectEquals('error|error|error|error|error|error|error|error');
@@ -571,7 +577,8 @@ begin
   FRunner.AddCase('rag.vql.messages')
     .Input('rag:vql:messages')
     .ExpectEquals('Expected ")" at position 36, found the end of the query|LIMIT appears twice (position 20)|' +
-      'Text starting at position 27 is not closed (to write a quote inside, repeat it: ''O''''Brien'')');
+      'Text starting at position 27 is not closed (to write a quote inside, repeat it: ''O''''Brien'')|' +
+      'No value was given for parameter $a (position 26)');
 
   FRunner.AddCase('rag.vql.no-leak')
     .Input('rag:vql:no-leak')
@@ -5736,6 +5743,33 @@ var
     end;
   end;
 
+  // Igual que Q, con parametros $x
+  function QP(const AVql: string; const AParams: array of Variant): string;
+  var
+    R: TAiRAGVector;
+    L: TStringList;
+    I: Integer;
+  begin
+    R := nil;
+    L := TStringList.Create;
+    try
+      try
+        V.ExecuteVQL(AVql, AParams, R);
+        if Assigned(R) then
+          for I := 0 to R.Count - 1 do
+            L.Add(VarToStr(R.Items[I].MetaData['autor']));
+        L.Sort;
+        L.StrictDelimiter := True;
+        Result := L.CommaText;
+      except
+        Result := 'error';
+      end;
+    finally
+      L.Free;
+      R.Free;
+    end;
+  end;
+
   function All(const AQueries: array of string): string;
   var
     I: Integer;
@@ -5885,6 +5919,24 @@ begin
         'SEARCH ''x'' WHERE codigo < 0']);
     end
 
+    else if Id = 'params' then
+      // Fase 3: el valor de $x entra tal cual; una comilla o un "' OR ..." no cambian la consulta
+      Result := QP('SEARCH $q WHERE autor = $a', ['q', 'x', 'a', 'Ana']) + '|' +
+        QP('SEARCH ''x'' WHERE autor = $a', ['a', 'Ana'' OR ''1''=''1']) + '|' +
+        QP('SEARCH ''x'' WHERE autor IN $lista', ['lista', VarArrayOf(['Ana', 'Bruno'])]) + '|' +
+        QP('SEARCH ''x'' WHERE autor NOT IN $lista', ['lista', VarArrayOf(['Ana', 'Bruno'])]) + '|' +
+        QP('SEARCH ''x'' WHERE precio > $p', ['p', 150]) + '|' +
+        QP('SEARCH ''x'' WHERE precio BETWEEN $a AND $b', ['a', 150.5, 'b', 160]) + '|' +
+        QP('SEARCH $q', ['q', 'x'' WHERE autor = ''Ana']) + '|' +
+        QP('SEARCH ''x'' WHERE autor = $Autor LIMIT $n', ['$autor', 'Ana', 'N', 1]) + '|' +
+        QP('SEARCH ''x'' WHERE autor = $a', []) + '|' +
+        QP('SEARCH ''x'' WHERE autor = $l', ['l', VarArrayOf(['Ana'])]) + '|' +
+        QP('SEARCH ''x''', ['solo']) + '|' +
+        QP('SEARCH ''x'' LIMIT $n', ['n', 0]) + '|' +
+        QP('SEARCH ''x'' WHERE autor = $', []) + '|' +
+        QP('MATCH ($e) SEARCH ''x'' WHERE autor = ''Ana''', ['e', 'DEFAULT']) + '|' +
+        QP('SEARCH ''x'' WHERE codigo = $c', ['c', 10])
+
     else if Id = 'syntax-errors' then
       Result := All([
         'SEARCH ''abc',
@@ -5900,7 +5952,8 @@ begin
       // La suite corre en ingles: mensajes de uMakerAi.Lang.En
       Result := Msg('SEARCH ''x'' WHERE (estado = ''activo''') + '|' +
         Msg('SEARCH ''x'' LIMIT 2 LIMIT 3') + '|' +
-        Msg('SEARCH ''x'' WHERE estado = ''act')
+        Msg('SEARCH ''x'' WHERE estado = ''act') + '|' +
+        Msg('SEARCH ''x'' WHERE autor = $a')
 
     else if Id = 'no-leak' then
     begin
@@ -5917,6 +5970,7 @@ begin
         'SEARCH ''x'' WHERE estado = ''a'' RETURN FOO',
         'SEARCH ''x'' WHERE estado',
         'SEARCH ''abc',
+        'SEARCH ''x'' WHERE autor IN $l',
         'SEARCH ''x'' WHERE NOT (estado = ''activo'' OR precio > 250) AND codigo IN (''9'', ''10'') ORDER BY codigo DESC LIMIT 3',
         'SEARCH ''x'' WHERE estado NOT LIKE ''b%'' AND precio NOT BETWEEN 1 AND 2 DISTINCT ON estado OFFSET 1'];
       for K := 0 to High(Repertorio) do

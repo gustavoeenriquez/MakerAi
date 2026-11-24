@@ -83,6 +83,8 @@ LIMIT 10
 **Logical:** `AND`, `OR`, `NOT (...)` / `NOT condicion` (negates the whole group), parentheses
 **Semantics (nov 24/2026):** `=`, `IN` and `LIKE` are case-sensitive; `ILIKE`, `CONTAINS`, `STARTS_WITH` and `ENDS_WITH` are not. `LIKE` wildcards are only `%` and `_`. Numbers stored as text compare as numbers. Without `USING` the query uses `rag.SearchOptions`; VQL never changes `rag.SearchOptions`. The debug view (`BtnVGqlToText`) shows `NOT` on negated conditions and groups.
 
+**Syntax (nov 24/2026):** clauses after `SEARCH` in any order; quotes are written twice (`'O''Brien'`), backslashes are plain characters; `--`, `//` and `/* */` comments; `EXISTS(field)`, `field EXISTS_ANY (...)`; parameters `$x` with `Rag.ExecuteVQL(vql, ['x', value])` (the value never goes through the parser: use them for anything a user or a model types). This demo runs the VQL typed in the prompt as is, without parameters.
+
 Errors raise `EVGQLParserError` (lexer/parse) or `EVGQLTranslationError` (compile).
 
 ## Key MakerAI Framework Classes

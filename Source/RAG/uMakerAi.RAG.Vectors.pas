@@ -245,6 +245,14 @@ type
 
     function ExecuteVQL(const AVqlQuery: string; out AResultVector: TAiRAGVector): string; overload;
 
+    // Con parametros $x: ['nombre', valor, ...] (nombre con o sin $, sin distinguir mayusculas)
+    // o un diccionario. El valor entra tal cual, nunca se lee como VQL: una comilla o un
+    // "' OR ..." en el texto del usuario no cambian la consulta. Una lista (VarArrayOf) vale
+    // despues de IN, EXISTS_ANY y EXISTS_ALL
+    function ExecuteVQL(const AVqlQuery: string; const AParams: array of Variant): string; overload;
+    function ExecuteVQL(const AVqlQuery: string; const AParams: array of Variant; out AResultVector: TAiRAGVector): string; overload;
+    function ExecuteVQL(const AVqlQuery: string; AParams: TDictionary<string, Variant>; out AResultVector: TAiRAGVector): string; overload;
+
     function ExecuteRequest(ARequest: TVGQLRequest; out AResultVector: TAiRAGVector): string;
 
     Function VectorToContextText(DataVec: TAiRAGVector; IncludeMetadata: Boolean; IncludeScore: Boolean): String;
@@ -1072,6 +1080,41 @@ begin
 end;
 
 function TAiRAGVector.ExecuteVQL(const AVqlQuery: string; out AResultVector: TAiRAGVector): string;
+begin
+  Result := ExecuteVQL(AVqlQuery, TDictionary<string, Variant>(nil), AResultVector);
+end;
+
+function TAiRAGVector.ExecuteVQL(const AVqlQuery: string; const AParams: array of Variant): string;
+var
+  TempVec: TAiRAGVector;
+begin
+  Result := ExecuteVQL(AVqlQuery, AParams, TempVec);
+  TempVec.Free;
+end;
+
+function TAiRAGVector.ExecuteVQL(const AVqlQuery: string; const AParams: array of Variant; out AResultVector: TAiRAGVector): string;
+var
+  Params: TDictionary<string, Variant>;
+  I: Integer;
+begin
+  AResultVector := nil;
+  if Odd(Length(AParams)) then
+    raise EVGQLParserError.Create(AiStr('rag.vql.param_pairs'));
+  Params := TDictionary<string, Variant>.Create;
+  try
+    I := 0;
+    while I < Length(AParams) do
+    begin
+      Params.AddOrSetValue(VarToStr(AParams[I]), AParams[I + 1]);
+      Inc(I, 2);
+    end;
+    Result := ExecuteVQL(AVqlQuery, Params, AResultVector);
+  finally
+    Params.Free;
+  end;
+end;
+
+function TAiRAGVector.ExecuteVQL(const AVqlQuery: string; AParams: TDictionary<string, Variant>; out AResultVector: TAiRAGVector): string;
 var
   Parser: TVGQLParser;
   AST: TVGQLQuery;
@@ -1085,7 +1128,7 @@ begin
   // ---------------------------------------------------------------------------
   // 1. FRONT-END: PARSEO DE LA SINTAXIS (Texto -> AST)
   // ---------------------------------------------------------------------------
-  Parser := TVGQLParser.Create(AVqlQuery);
+  Parser := TVGQLParser.Create(AVqlQuery, AParams);
   try
     AST := Parser.Parse;
   finally

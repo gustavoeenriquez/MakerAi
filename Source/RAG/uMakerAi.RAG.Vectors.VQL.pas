@@ -48,7 +48,8 @@ type
     tkMmr,       // MMR  — modo de optimizacion
     tkModel,     // MODEL — campo de retorno extendido
     tkTop,       // TOP — alias de LIMIT
-    tkSemicolon  // ';' final opcional
+    tkSemicolon, // ';' final opcional
+    tkParameter  // $nombre (Text = nombre sin el $)
   );
 
   TVGQLToken = record
@@ -99,9 +100,14 @@ type
   private
     FLiteralType: TLiteralType;
     FValue: string;
+    FData: Variant;
+    FHasData: Boolean;
   public
     property LiteralType: TLiteralType read FLiteralType write FLiteralType;
     property Value: string read FValue write FValue;
+    // Valor de un parametro $x tal como llego (numero, fecha, texto...): no pasa por el lexer
+    property Data: Variant read FData write FData;
+    property HasData: Boolean read FHasData write FHasData;
   end;
 
   TIdentifierExpression = class(TExpression)
@@ -347,6 +353,14 @@ TBinaryOperator = (
   private
     FLexer: TVGQLLexer;
     FCurrent: TVGQLToken;
+    FParams: TDictionary<string, Variant>; // Copia propia, nombres sin distinguir mayusculas
+
+    // Parametros $x: el valor se toma tal cual, nunca se vuelve a leer como VQL
+    function ParamValue(const AName: string; APosition: Integer): Variant;
+    function LiteralFromValue(const AName: string; const AValue: Variant; APosition: Integer): TLiteralExpression;
+    function ParseTextValue: string;     // 'texto' o $x
+    function ParseNumberValue: Double;   // numero o $x
+    function ParseIntegerValue(AMin: Integer; const AErrorMsg: string): Integer; // entero >= AMin o $x
 
     procedure Next;
     procedure Expect(AKind: TVGQLTokenKind);
@@ -376,7 +390,10 @@ TBinaryOperator = (
     function ParseComparison: TExpression;
     function ParsePrimary: TExpression;
   public
-    constructor Create(const AText: string);
+    constructor Create(const AText: string); overload;
+    // AParams: nombre (con o sin $) -> valor; una lista (VarArrayOf) vale despues de IN,
+    // EXISTS_ANY y EXISTS_ALL. Se copia: el diccionario sigue siendo del que llama
+    constructor Create(const AText: string; AParams: TDictionary<string, Variant>); overload;
     destructor Destroy; override;
     function Parse: TVGQLQuery;
   end;
@@ -487,7 +504,7 @@ TBinaryOperator = (
 implementation
 
 uses
-  uMakerAi.Localization;
+  System.Generics.Defaults, uMakerAi.Localization;
 
 { TVGQLLexer }
 
@@ -822,6 +839,17 @@ begin
       Exit(ReadString);
     '0' .. '9':
       Exit(ReadNumber);
+    '$':
+      begin
+        // $nombre: parametro. El nombre sigue las reglas de un identificador
+        Next;
+        if IsEOF or not(Peek.IsLetter or (Peek = '_')) then
+          raise EVGQLParserError.CreateFmt(AiStr('rag.vql.lex_error'), ['$', Result.Position]);
+        while (not IsEOF) and (Peek.IsLetterOrDigit or (Peek = '_')) do
+          Next;
+        Result.Kind := tkParameter;
+        Result.Text := Copy(FText, Result.Position + 1, FPos - Result.Position - 1);
+      end;
     '-':
       if PeekAt(1).IsDigit then
         Exit(ReadNumber)
@@ -998,7 +1026,24 @@ end;
 
 constructor TVGQLParser.Create(const AText: string);
 begin
+  Create(AText, nil);
+end;
+
+constructor TVGQLParser.Create(const AText: string; AParams: TDictionary<string, Variant>);
+var
+  Pair: TPair<string, Variant>;
+  Name: string;
+begin
   inherited Create;
+  FParams := TDictionary<string, Variant>.Create(TIStringComparer.Ordinal);
+  if Assigned(AParams) then
+    for Pair in AParams do
+    begin
+      Name := Pair.Key;
+      if Name.StartsWith('$') then
+        Name := Name.Substring(1);
+      FParams.AddOrSetValue(Name, Pair.Value);
+    end;
   FLexer := TVGQLLexer.Create(AText);
   Next; // Cargar primer token
 end;
@@ -1006,7 +1051,114 @@ end;
 destructor TVGQLParser.Destroy;
 begin
   FLexer.Free;
+  FParams.Free;
   inherited;
+end;
+
+function TVGQLParser.ParamValue(const AName: string; APosition: Integer): Variant;
+begin
+  if not FParams.TryGetValue(AName, Result) then
+    raise EVGQLParserError.CreateFmt(AiStr('rag.vql.param_missing'), [AName, APosition]);
+end;
+
+function TVGQLParser.LiteralFromValue(const AName: string; const AValue: Variant; APosition: Integer): TLiteralExpression;
+begin
+  if VarIsArray(AValue) then
+    raise EVGQLParserError.CreateFmt(AiStr('rag.vql.param_list'), [AName, APosition]);
+  Result := TLiteralExpression.Create(APosition);
+  Result.Data := AValue;
+  Result.HasData := True;
+  if VarIsNull(AValue) or VarIsEmpty(AValue) then
+  begin
+    Result.LiteralType := ltNull;
+    Result.Value := 'NULL';
+  end
+  else if (VarType(AValue) and varTypeMask) = varBoolean then
+  begin
+    Result.LiteralType := ltBoolean;
+    Result.Value := BoolToStr(AValue, True).ToUpper;
+  end
+  else if VarIsNumeric(AValue) then
+  begin
+    Result.LiteralType := ltNumber;
+    Result.Value := AiFilterValueToText(AValue);
+  end
+  else
+  begin
+    Result.LiteralType := ltString;
+    Result.Value := VarToStr(AValue);
+  end;
+end;
+
+function TVGQLParser.ParseTextValue: string;
+var
+  V: Variant;
+begin
+  if Check(tkParameter) then
+  begin
+    V := ParamValue(FCurrent.Text, FCurrent.Position);
+    if VarIsArray(V) then
+      raise EVGQLParserError.CreateFmt(AiStr('rag.vql.param_list'), [FCurrent.Text, FCurrent.Position]);
+    Result := AiFilterValueToText(V);
+    Next;
+  end
+  else
+  begin
+    if Check(tkString) then
+      Result := FCurrent.Text;
+    Expect(tkString);
+  end;
+end;
+
+function TVGQLParser.ParseNumberValue: Double;
+var
+  V: Variant;
+begin
+  if Check(tkParameter) then
+  begin
+    V := ParamValue(FCurrent.Text, FCurrent.Position);
+    if VarIsNumeric(V) and ((VarType(V) and varTypeMask) <> varBoolean) then
+      Result := V
+    else if VarIsArray(V) or not TryStrToFloat(VarToStr(V), Result, TFormatSettings.Invariant) then
+      raise EVGQLParserError.CreateFmt(AiStr('rag.vql.param_type'), [FCurrent.Text, FCurrent.Position, AiStr('rag.vql.a_number')]);
+    Next;
+  end
+  else
+  begin
+    if Check(tkNumber) then
+      Result := StrToFloat(FCurrent.Text, TFormatSettings.Invariant)
+    else
+      Result := 0;
+    Expect(tkNumber);
+  end;
+end;
+
+function TVGQLParser.ParseIntegerValue(AMin: Integer; const AErrorMsg: string): Integer;
+var
+  V: Variant;
+  D: Double;
+  Ok: Boolean;
+begin
+  Ok := False;
+  Result := 0;
+  if Check(tkParameter) then
+  begin
+    V := ParamValue(FCurrent.Text, FCurrent.Position);
+    if (not VarIsArray(V)) and VarIsNumeric(V) and ((VarType(V) and varTypeMask) <> varBoolean) then
+    begin
+      D := V;
+      Ok := (Frac(D) = 0) and (D >= AMin) and (D <= MaxInt);
+      if Ok then
+        Result := Trunc(D);
+    end
+    else if not VarIsArray(V) then
+      Ok := TryStrToInt(VarToStr(V), Result) and (Result >= AMin);
+  end
+  else if Check(tkNumber) then
+    Ok := TryStrToInt(FCurrent.Text, Result) and (Result >= AMin);
+  if not Ok then
+    raise EVGQLParserError.Create(AErrorMsg);
+  Next;
 end;
 
 procedure TVGQLParser.Next;
@@ -1078,6 +1230,8 @@ begin
       Result := 'EXISTS_ANY';
     tkExistsAll:
       Result := 'EXISTS_ALL';
+    tkParameter:
+      Result := AiStr('rag.vql.a_parameter');
   else
     Result := UpperCase(Copy(GetEnumName(TypeInfo(TVGQLTokenKind), Ord(AKind)), 3, MaxInt));
   end;
@@ -1121,7 +1275,6 @@ end;
 // modelo escribe a menudo, era error). ';' final opcional
 function TVGQLParser.Parse: TVGQLQuery;
 var
-  N: Integer;
   LimitSeen, OffsetSeen: Boolean;
 
   procedure CheckOnce(AAlreadySeen: Boolean);
@@ -1194,13 +1347,7 @@ begin
             CheckOnce(LimitSeen);
             LimitSeen := True;
             Next;
-            if Check(tkNumber) and TryStrToInt(FCurrent.Text, N) and (N > 0) then
-            begin
-              Result.Limit := N;
-              Next;
-            end
-            else
-              raise EVGQLParserError.Create(AiStr('rag.vql.limit_number'));
+            Result.Limit := ParseIntegerValue(1, AiStr('rag.vql.limit_number'));
           end;
         tkOffset:
           begin
@@ -1208,13 +1355,7 @@ begin
             CheckOnce(OffsetSeen);
             OffsetSeen := True;
             Next;
-            if Check(tkNumber) and TryStrToInt(FCurrent.Text, N) and (N >= 0) then
-            begin
-              Result.Offset := N;
-              Next;
-            end
-            else
-              raise EVGQLParserError.Create(AiStr('rag.vql.offset_number'));
+            Result.Offset := ParseIntegerValue(0, AiStr('rag.vql.offset_number'));
           end;
       else
         raise EVGQLParserError.CreateFmt(AiStr('rag.vql.unexpected_clause'), [FCurrent.Text, FCurrent.Position]);
@@ -1237,24 +1378,22 @@ begin
     Next; // consumir MATCH
     Expect(tkLParen);
 
-    if Check(tkIdentifier) then
-    begin
-      Result.EntityName := FCurrent.Text; // Capturar texto ANTES de avanzar
-      Next;
-    end
+    // Entidad: un nombre o $x (p. ej. la entidad del cliente, sin armarla dentro del texto)
+    if Check(tkParameter) then
+      Result.EntityName := ParseTextValue
     else
+    begin
+      if Check(tkIdentifier) then
+        Result.EntityName := FCurrent.Text;
       Expect(tkIdentifier);
+    end;
 
     // Alias opcional
     if Match(tkColon) then
     begin
       if Check(tkIdentifier) then
-      begin
         Result.Alias := FCurrent.Text;
-        Next;
-      end
-      else
-        Expect(tkIdentifier);
+      Expect(tkIdentifier);
     end;
 
     Expect(tkRParen);
@@ -1271,13 +1410,7 @@ begin
   Result := TSearchClause.Create(FCurrent.Position);
   try
     Next; // consumir SEARCH
-    if Check(tkString) then
-    begin
-      Result.QueryText := FCurrent.Text; // Capturar el valor del string
-      Next; // Avanzar
-    end
-    else
-      Expect(tkString);
+    Result.QueryText := ParseTextValue; // 'texto' o $x (la pregunta del usuario, tal cual)
   except
     Result.Free;
     raise;
@@ -1309,17 +1442,9 @@ begin
     begin
       Expect(tkWeights);
       Expect(tkLParen);
-      if Check(tkNumber) then
-      begin
-        Result.SemanticWeight := StrToFloat(FCurrent.Text, TFormatSettings.Invariant);
-        Next;
-      end;
+      Result.SemanticWeight := ParseNumberValue;
       Expect(tkComma);
-      if Check(tkNumber) then
-      begin
-        Result.LexicalWeight := StrToFloat(FCurrent.Text, TFormatSettings.Invariant);
-        Next;
-      end;
+      Result.LexicalWeight := ParseNumberValue;
       Expect(tkRParen);
     end;
 
@@ -1454,7 +1579,9 @@ var
   BinExpr: TBinaryExpression;
   Op: TBinaryOperator;
   IsNegated: Boolean;
-  NotPos: Integer;
+  NotPos, I, PPos: Integer;
+  PName: string;
+  V: Variant;
 begin
   Left := ParsePrimary;
 
@@ -1508,11 +1635,31 @@ begin
       end;
       InExpr.IsNot := IsNegated;
       Next;
-      Expect(tkLParen);
-      repeat
-        InExpr.Values.Add(ParsePrimary);
-      until not Match(tkComma);
-      Expect(tkRParen);
+      if Check(tkParameter) then
+      begin
+        // IN $lista: cada elemento de la lista es un valor (un valor suelto, una lista de uno)
+        PName := FCurrent.Text;
+        PPos := FCurrent.Position;
+        V := ParamValue(PName, PPos);
+        if VarIsArray(V) then
+        begin
+          for I := VarArrayLowBound(V, 1) to VarArrayHighBound(V, 1) do
+            InExpr.Values.Add(LiteralFromValue(PName, VarArrayGet(V, [I]), PPos));
+        end
+        else
+          InExpr.Values.Add(LiteralFromValue(PName, V, PPos));
+        Next;
+        if InExpr.Values.Count = 0 then
+          raise EVGQLParserError.CreateFmt(AiStr('rag.vql.param_empty_list'), [PName, PPos]);
+      end
+      else
+      begin
+        Expect(tkLParen);
+        repeat
+          InExpr.Values.Add(ParsePrimary);
+        until not Match(tkComma);
+        Expect(tkRParen);
+      end;
     except
       InExpr.Free;
       raise;
@@ -1639,6 +1786,13 @@ begin
         Result := LitExpr;
       end;
 
+    tkParameter:
+      begin
+        // $x: el valor entra tal cual (numero, fecha, texto con comillas...), sin pasar por el lexer
+        Result := LiteralFromValue(FCurrent.Text, ParamValue(FCurrent.Text, FCurrent.Position), FCurrent.Position);
+        Next;
+      end;
+
     tkNull:
       begin
         LitExpr := TLiteralExpression.Create(FCurrent.Position);
@@ -1671,21 +1825,7 @@ begin
   Result := TRerankClause.Create(FCurrent.Position);
   try
     Next; // Consumir el token 'RERANK'
-
-    // CORRECCION: Verificar primero, asignar, y luego avanzar.
-    if Check(tkString) then
-    begin
-      Result.Query := FCurrent.Text; // Capturamos el texto ACTUAL
-      Next; // Avanzamos al siguiente token
-    end
-    else
-    begin
-      // Si quieres que el string sea obligatorio:
-      Expect(tkString);
-
-      // NOTA: Si quisieras que el string fuera OPCIONAL (para usar la query original),
-      // simplemente quitarias el 'else' y el 'Expect'.
-    end;
+    Result.Query := ParseTextValue; // 'texto' o $x
 
     // REGENERATE opcional
     if Match(tkRegenerate) then
@@ -1714,14 +1854,10 @@ begin
     end;
     Next; // Consumir el Scope (ej: GLOBAL)
 
-    // 2. Leer el numero ANTES de avanzar
-    if Check(tkNumber) then
-    begin
-      Result.Value := StrToFloat(FCurrent.Text, TFormatSettings.Invariant);
-      Next; // Ahora si avanzamos al siguiente token
-    end
-    else
+    // 2. El umbral: numero o $x
+    if not(FCurrent.Kind in [tkNumber, tkParameter]) then
       raise EVGQLParserError.CreateFmt(AiStr('rag.vql.threshold_number'), [FCurrent.Position]);
+    Result.Value := ParseNumberValue;
 
   except
     Result.Free;
@@ -1744,11 +1880,8 @@ begin
       // Lambda opcional: MMR(0.7)
       if Match(tkLParen) then
       begin
-        if Check(tkNumber) then
-        begin
-          Result.Lambda := StrToFloat(FCurrent.Text, TFormatSettings.Invariant);
-          Next;
-        end;
+        if FCurrent.Kind in [tkNumber, tkParameter] then
+          Result.Lambda := ParseNumberValue;
         Expect(tkRParen);
       end;
     end
@@ -2035,6 +2168,8 @@ begin
     raise EVGQLTranslationError.Create(AiStr('rag.vql.literal_expected'));
 
   Lit := TLiteralExpression(AExpr);
+  if Lit.HasData then
+    Exit(Lit.Data); // parametro $x: su valor, con su tipo
   case Lit.LiteralType of
     ltString:
       Result := Lit.Value;
