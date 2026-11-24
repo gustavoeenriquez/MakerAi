@@ -458,6 +458,15 @@ type
 
     function Query(const APlan: TQueryPlan; ADepth, ALimit: Integer; APrecision: Double): TArray<TAiRagGraphNode>; virtual; abstract;
 
+    // Esquema calculado en la base, para SHOW SCHEMA / SHOW PROPERTIES de MakerGQL sin cargar el
+    // grafo en memoria. Opcionales: la base devuelve False y el grafo carga todo para calcularlo.
+    // GetSchemaCounts: etiqueta -> cantidad de nodos y '(:A)-[:TIPO]->(:B)' -> cantidad.
+    // GetPropertyCounts: etiqueta -> (clave -> cantidad), aparte nodos y relaciones; ALabel vacio =
+    // todas, si no solo las de esa etiqueta (sin distinguir mayusculas). Toda etiqueta de nodo que
+    // pase el filtro aparece aunque sus nodos no tengan propiedades.
+    function GetSchemaCounts(ALabelCounts, ATripleCounts: TDictionary<string, Integer>): Boolean; virtual;
+    function GetPropertyCounts(const ALabel: string; ANodeProps, AEdgeProps: TObjectDictionary<string, TDictionary<string, Integer>>): Boolean; virtual;
+
     property Graph: TAiRagGraph read FGraph;
   public
     function EmbeddingToString(const AData: TAiEmbeddingData): string;
@@ -561,6 +570,7 @@ type
     FUpdateCount: Integer;
     FDriver: TAiRagGraphDriverBase;
     FAllowWrite: Boolean;
+    FGQLFullyLoaded: Boolean; // Esta consulta de MakerGQL ya cargo todo el grafo desde el driver
 
     function GetNodeCount: Integer;
     function GetEdgeCount: Integer;
@@ -582,6 +592,7 @@ type
     function EvaluateGQLFunction(AFunc: TFunctionExpr; ABoundElements: TDictionary<string, TObject>): Variant;
     function RunGQLProjection(AStage: TGQLProjection; const AInput: TArray<TDictionary<string, TObject>>): TArray<TDictionary<string, TObject>>;
     function GQLCandidates(APattern: TMatchNodePattern): TArray<TAiRagGraphNode>;
+    procedure GQLEnsureFullGraph;
     function GQLSimilarity(AObj: TObject; const AText: string; var ACacheText: string; var ACache: TAiEmbeddingData): Variant;
     function GQLExplain(AQuery: TGraphMatchQuery; const ACommand: string): string;
     function GQLApplyWrites(AQuery: TGraphMatchQuery; const ARows: TArray<TDictionary<string, TObject>>): string;
@@ -593,6 +604,10 @@ type
     destructor Destroy; override;
 
     procedure RebuildIndexes;
+    // Con driver: trae a memoria todos los nodos (por etiqueta) y sus relaciones. Lo usan las
+    // operaciones de MakerGQL sobre todo el grafo (MATCH sin etiqueta, comunidades, centralidad,
+    // grados). Cuesta del orden de dos consultas por nodo: para grafos grandes, usar etiquetas.
+    procedure LoadFromDriver;
 
     function InternalHydrateNode(const ANodeData: TNodeDataRecord): TAiRagGraphNode;
     function InternalHydrateEdge(const AEdgeData: TEdgeDataRecord): TAiRagGraphEdge;
@@ -3124,6 +3139,7 @@ begin
   if ACode.Trim.IsEmpty then
     Exit;
 
+  FGQLFullyLoaded := False;
   Parser := TGraphParser.Create(ACode, AParams);
   try
     QueryObj := Parser.Parse;
@@ -3224,6 +3240,7 @@ begin
                 StartNode := FindNodeByPattern(Parser.CommandSourcePattern);
                 if StartNode <> nil then
                 begin
+                  GQLEnsureFullGraph; // La cercania se mide contra todo el grafo
                   Score := Self.GetClosenessCentrality(StartNode);
 
                   SetLength(AResultObjects, 1);
@@ -3244,6 +3261,7 @@ begin
             // -------------------------------------------------------
             cmdDegrees:
               begin
+                GQLEnsureFullGraph;
                 NodeListResult := Self.GetNodesByDegree(Parser.CommandLimit, dtTotal);
                 SetLength(AResultObjects, Length(NodeListResult));
 
@@ -3268,13 +3286,20 @@ begin
                 Counts := TDictionary<string, Integer>.Create;
                 Triples := TDictionary<string, Integer>.Create;
                 try
-                  for Node in FNodeRegistry.Values do
+                  // Con driver: lo cuenta la base; si el driver no sabe, se carga todo y se cuenta aqui
+                  if not(Assigned(FDriver) and FDriver.GetSchemaCounts(Counts, Triples)) then
                   begin
-                    GQLBump(Counts, Node.NodeLabel);
-                    for Edge in Node.OutgoingEdges do
+                    Counts.Clear;
+                    Triples.Clear;
+                    GQLEnsureFullGraph;
+                    for Node in FNodeRegistry.Values do
                     begin
-                      Key := '(:' + Edge.FromNode.NodeLabel + ')-[:' + Edge.EdgeLabel + ']->(:' + Edge.ToNode.NodeLabel + ')';
-                      GQLBump(Triples, Key);
+                      GQLBump(Counts, Node.NodeLabel);
+                      for Edge in Node.OutgoingEdges do
+                      begin
+                        Key := '(:' + Edge.FromNode.NodeLabel + ')-[:' + Edge.EdgeLabel + ']->(:' + Edge.ToNode.NodeLabel + ')';
+                        GQLBump(Triples, Key);
+                      end;
                     end;
                   end;
                   Rows := [];
@@ -3318,29 +3343,36 @@ begin
                 PropMap := TObjectDictionary < string, TDictionary < string, Integer >>.Create([doOwnsValues]);
                 EdgePropMap := TObjectDictionary < string, TDictionary < string, Integer >>.Create([doOwnsValues]);
                 try
-                  for Node in FNodeRegistry.Values do
+                  // Con driver: lo cuenta la base; si el driver no sabe, se carga todo y se cuenta aqui
+                  if not(Assigned(FDriver) and FDriver.GetPropertyCounts(Parser.CommandLabel, PropMap, EdgePropMap)) then
                   begin
-                    if (Parser.CommandLabel = '') or SameText(Node.NodeLabel, Parser.CommandLabel) then
+                    PropMap.Clear;
+                    EdgePropMap.Clear;
+                    GQLEnsureFullGraph;
+                    for Node in FNodeRegistry.Values do
                     begin
-                      if not PropMap.TryGetValue(Node.NodeLabel, KeyCounts) then
+                      if (Parser.CommandLabel = '') or SameText(Node.NodeLabel, Parser.CommandLabel) then
                       begin
-                        KeyCounts := TDictionary<string, Integer>.Create;
-                        PropMap.Add(Node.NodeLabel, KeyCounts);
-                      end;
-                      for Key in Node.MetaData.InternalDictionary.Keys do
-                        GQLBump(KeyCounts, Key);
-                    end;
-                    for Edge in Node.OutgoingEdges do
-                      if (Parser.CommandLabel = '') or SameText(Edge.EdgeLabel, Parser.CommandLabel) then
-                      begin
-                        if not EdgePropMap.TryGetValue(Edge.EdgeLabel, KeyCounts) then
+                        if not PropMap.TryGetValue(Node.NodeLabel, KeyCounts) then
                         begin
                           KeyCounts := TDictionary<string, Integer>.Create;
-                          EdgePropMap.Add(Edge.EdgeLabel, KeyCounts);
+                          PropMap.Add(Node.NodeLabel, KeyCounts);
                         end;
-                        for Key in Edge.MetaData.InternalDictionary.Keys do
+                        for Key in Node.MetaData.InternalDictionary.Keys do
                           GQLBump(KeyCounts, Key);
                       end;
+                      for Edge in Node.OutgoingEdges do
+                        if (Parser.CommandLabel = '') or SameText(Edge.EdgeLabel, Parser.CommandLabel) then
+                        begin
+                          if not EdgePropMap.TryGetValue(Edge.EdgeLabel, KeyCounts) then
+                          begin
+                            KeyCounts := TDictionary<string, Integer>.Create;
+                            EdgePropMap.Add(Edge.EdgeLabel, KeyCounts);
+                          end;
+                          for Key in Edge.MetaData.InternalDictionary.Keys do
+                            GQLBump(KeyCounts, Key);
+                        end;
+                    end;
                   end;
 
                   Rows := [];
@@ -3404,6 +3436,7 @@ begin
             // -------------------------------------------------------
             cmdCommunities:
               begin
+                GQLEnsureFullGraph;
                 CommMap := Self.DetectCommunities;
                 Groups := TObjectDictionary < Integer, TList < TAiRagGraphNode >>.Create([doOwnsValues]);
                 try
@@ -3505,6 +3538,7 @@ begin
             // -------------------------------------------------------
             cmdCentralityTop:
               begin
+                GQLEnsureFullGraph;
                 Scored := TList < TPair < TAiRagGraphNode, Double >>.Create;
                 try
                   for Node in FNodeRegistry.Values do
@@ -5594,12 +5628,39 @@ begin
   end;
 end;
 
+procedure TAiRagGraph.LoadFromDriver;
+var
+  Lbl: string;
+  Node: TAiRagGraphNode;
+begin
+  if not Assigned(FDriver) then
+    Exit;
+  for Lbl in FDriver.GetUniqueNodeLabels do
+    FDriver.FindNodesByLabel(Lbl); // Hidrata cada nodo en el registro
+  for Node in FNodeRegistry.Values.ToArray do
+    Node.EnsureEdgesAreLoaded;
+end;
+
+// Una vez por consulta (ExecuteMakerGQL lo reinicia): lo nuevo en la base se ve en la siguiente
+procedure TAiRagGraph.GQLEnsureFullGraph;
+begin
+  if FGQLFullyLoaded or not Assigned(FDriver) then
+    Exit;
+  LoadFromDriver;
+  FGQLFullyLoaded := True;
+end;
+
 function TAiRagGraph.GQLCandidates(APattern: TMatchNodePattern): TArray<TAiRagGraphNode>;
 var
   Part: string;
 begin
   if APattern.NodeLabel.IsEmpty then
-    Result := FNodeRegistry.Values.ToArray
+  begin
+    // Sin etiqueta: todos los nodos. Con driver, solo los cargados no alcanza (un grafo recien
+    // abierto no tiene ninguno y MATCH (n) devolvia vacio)
+    GQLEnsureFullGraph;
+    Result := FNodeRegistry.Values.ToArray;
+  end
   else if APattern.NodeLabel.IndexOf('|') < 0 then
     Result := Self.FindNodesByLabel(APattern.NodeLabel)
   else
@@ -7407,6 +7468,17 @@ end;
 procedure TAiRagGraphDriverBase.AssignToGraph(AGraph: TAiRagGraph);
 begin
   FGraph := AGraph;
+end;
+
+function TAiRagGraphDriverBase.GetSchemaCounts(ALabelCounts, ATripleCounts: TDictionary<string, Integer>): Boolean;
+begin
+  Result := False; // No implementado: el grafo carga todo y cuenta en memoria
+end;
+
+function TAiRagGraphDriverBase.GetPropertyCounts(const ALabel: string;
+  ANodeProps, AEdgeProps: TObjectDictionary<string, TDictionary<string, Integer>>): Boolean;
+begin
+  Result := False; // No implementado: el grafo carga todo y cuenta en memoria
 end;
 
 function TAiRagGraphDriverBase.EmbeddingToString(const AData: TAiEmbeddingData): string;

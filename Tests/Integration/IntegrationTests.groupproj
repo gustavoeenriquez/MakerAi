@@ -12,6 +12,9 @@
         <Projects Include="069-McpSessionGateTest\McpSessionGateTest.dproj">
             <Dependencies/>
         </Projects>
+        <Projects Include="070-GqlPostgresTest\GqlPostgresTest.dproj">
+            <Dependencies/>
+        </Projects>
     </ItemGroup>
     <ProjectExtensions>
         <Borland.Personality>Default.Personality.12</Borland.Personality>
@@ -47,14 +50,23 @@
     <Target Name="McpSessionGateTest:Make">
         <MSBuild Projects="069-McpSessionGateTest\McpSessionGateTest.dproj" Targets="Make"/>
     </Target>
+    <Target Name="GqlPostgresTest">
+        <MSBuild Projects="070-GqlPostgresTest\GqlPostgresTest.dproj"/>
+    </Target>
+    <Target Name="GqlPostgresTest:Clean">
+        <MSBuild Projects="070-GqlPostgresTest\GqlPostgresTest.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="GqlPostgresTest:Make">
+        <MSBuild Projects="070-GqlPostgresTest\GqlPostgresTest.dproj" Targets="Make"/>
+    </Target>
     <Target Name="Build">
-        <CallTarget Targets="ClaudeChatTest;AsyncHistoryTest;McpSessionGateTest"/>
+        <CallTarget Targets="ClaudeChatTest;AsyncHistoryTest;McpSessionGateTest;GqlPostgresTest"/>
     </Target>
     <Target Name="Clean">
-        <CallTarget Targets="ClaudeChatTest:Clean;AsyncHistoryTest:Clean;McpSessionGateTest:Clean"/>
+        <CallTarget Targets="ClaudeChatTest:Clean;AsyncHistoryTest:Clean;McpSessionGateTest:Clean;GqlPostgresTest:Clean"/>
     </Target>
     <Target Name="Make">
-        <CallTarget Targets="ClaudeChatTest:Make;AsyncHistoryTest:Make;McpSessionGateTest:Make"/>
+        <CallTarget Targets="ClaudeChatTest:Make;AsyncHistoryTest:Make;McpSessionGateTest:Make;GqlPostgresTest:Make"/>
     </Target>
     <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
 </Project>

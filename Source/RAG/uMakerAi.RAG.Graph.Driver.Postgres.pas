@@ -42,6 +42,9 @@ type
     // --- Metadatos del Grafo ---
     function GetUniqueNodeLabels: TArray<string>; override;
     function GetUniqueEdgeLabels: TArray<string>; override;
+    // SHOW SCHEMA / SHOW PROPERTIES de MakerGQL contados en la base (sin cargar el grafo)
+    function GetSchemaCounts(ALabelCounts, ATripleCounts: TDictionary<string, Integer>): Boolean; override;
+    function GetPropertyCounts(const ALabel: string; ANodeProps, AEdgeProps: TObjectDictionary<string, TDictionary<string, Integer>>): Boolean; override;
 
     // --- B�squedas Espec�ficas ---
     function FindNodeByName(const AName, ANodeLabel: string): TAiRagGraphNode; override;
@@ -249,6 +252,7 @@ begin
     Query.SQL.Add('INSERT INTO ' + FNodesTableName + ' (entidad, id, node_label, name, node_text, properties, embedding)');
     Query.SQL.Add(' VALUES (:entidad, :id, :node_label, :name, :node_text, :properties::jsonb, ' + EmbeddingSQL + '::vector)');
     Query.SQL.Add(' ON CONFLICT (id, entidad) DO UPDATE SET ');
+    Query.SQL.Add('   node_label = EXCLUDED.node_label, ');
     Query.SQL.Add('   name = EXCLUDED.name, ');
     Query.SQL.Add('   node_text = EXCLUDED.node_text, ');
     Query.SQL.Add('   properties = EXCLUDED.properties');
@@ -319,6 +323,8 @@ begin
     Query.SQL.Add('INSERT INTO ' + FEdgesTableName + ' (entidad, id, edge_label, name, node_text, source_node_id, target_node_id, weight, properties, embedding) ');
     Query.SQL.Add('VALUES (:entidad, :id, :edge_label, :name, :node_text, :source_node_id, :target_node_id, :weight, :properties::JsonB, ' + EmbeddingSQL + '::vector)');
     Query.SQL.Add('ON CONFLICT (id, entidad) DO UPDATE SET ');
+    Query.SQL.Add('  edge_label = EXCLUDED.edge_label, ');
+    Query.SQL.Add('  name = EXCLUDED.name, ');
     Query.SQL.Add('  weight = EXCLUDED.weight, ');
     Query.SQL.Add('  properties = EXCLUDED.properties, ');
     Query.SQL.Add('  node_text = EXCLUDED.node_text');
@@ -387,7 +393,9 @@ begin
   Result := False;
   Query := NewQuery;
   try
-    Query.SQL.Add('SELECT id, node_label, name, node_text, properties, embedding ');
+    // embedding::text: FireDAC lee el tipo vector de pgvector como ftBlob y AsString daria
+    // los bytes crudos (StringToEmbedding fabricaba un vector de un elemento)
+    Query.SQL.Add('SELECT id, node_label, name, node_text, properties, embedding::text AS embedding ');
     Query.SQL.Add('FROM ' + FNodesTableName);
     Query.SQL.Add('WHERE id = :id AND entidad = :entidad');
     Query.ParamByName('id').AsWideString := ANodeID;
@@ -425,7 +433,7 @@ begin
   Query := NewQuery;
   try
     Query.SQL.Add('SELECT id, edge_label, name, source_node_id, target_node_id, ');
-    Query.SQL.Add('  weight, properties, embedding, node_text ');
+    Query.SQL.Add('  weight, properties, embedding::text AS embedding, node_text '); // ver FindNodeDataByID
     Query.SQL.Add('FROM  ' + FEdgesTableName);
     Query.SQL.Add('WHERE id = :id AND entidad = :entidad');
 
@@ -472,7 +480,7 @@ begin
   Query := NewQuery;
   try
     Query.SQL.Add('SELECT id, edge_label, name, source_node_id, target_node_id, ');
-    Query.SQL.Add('       weight, properties, embedding, node_text ');
+    Query.SQL.Add('       weight, properties, embedding::text AS embedding, node_text '); // ver FindNodeDataByID
     Query.SQL.Add('FROM ' + FEdgesTableName);
     Query.SQL.Add('WHERE entidad = :entidad');
     Query.SQL.Add('  AND (source_node_id = :node_id OR target_node_id = :node_id)');
@@ -1094,6 +1102,85 @@ begin
     Query.Free;
     LabelList.Free;
   end;
+end;
+
+function TAiRagGraphPostgresDriver.GetSchemaCounts(ALabelCounts, ATripleCounts: TDictionary<string, Integer>): Boolean;
+var
+  Query: TFDQuery;
+begin
+  Query := NewQuery;
+  try
+    Query.SQL.Text := 'SELECT node_label, count(*) AS n FROM ' + FNodesTableName +
+      ' WHERE entidad = :entidad GROUP BY node_label';
+    Query.ParamByName('entidad').AsWideString := FCurrentEntidad;
+    Query.Open;
+    while not Query.Eof do
+    begin
+      ALabelCounts.AddOrSetValue(Query.Fields[0].AsString, Query.Fields[1].AsInteger);
+      Query.Next;
+    end;
+    Query.Close;
+
+    // Mismo formato que el conteo en memoria: (:A)-[:TIPO]->(:B)
+    Query.SQL.Text := 'SELECT s.node_label, e.edge_label, t.node_label, count(*) AS n FROM ' + FEdgesTableName + ' e' +
+      ' JOIN ' + FNodesTableName + ' s ON s.id = e.source_node_id AND s.entidad = e.entidad' +
+      ' JOIN ' + FNodesTableName + ' t ON t.id = e.target_node_id AND t.entidad = e.entidad' +
+      ' WHERE e.entidad = :entidad GROUP BY s.node_label, e.edge_label, t.node_label';
+    Query.ParamByName('entidad').AsWideString := FCurrentEntidad;
+    Query.Open;
+    while not Query.Eof do
+    begin
+      ATripleCounts.AddOrSetValue('(:' + Query.Fields[0].AsString + ')-[:' + Query.Fields[1].AsString + ']->(:' +
+        Query.Fields[2].AsString + ')', Query.Fields[3].AsInteger);
+      Query.Next;
+    end;
+    Result := True;
+  finally
+    Query.Free;
+  end;
+end;
+
+function TAiRagGraphPostgresDriver.GetPropertyCounts(const ALabel: string;
+  ANodeProps, AEdgeProps: TObjectDictionary<string, TDictionary<string, Integer>>): Boolean;
+
+  procedure Fill(const ATable, ALabelColumn: string; AMap: TObjectDictionary<string, TDictionary<string, Integer>>);
+  var
+    Query: TFDQuery;
+    Counts: TDictionary<string, Integer>;
+    Lbl: string;
+  begin
+    Query := NewQuery;
+    try
+      // LEFT JOIN LATERAL: una etiqueta sin propiedades sale igual (clave NULL)
+      Query.SQL.Text := 'SELECT x.' + ALabelColumn + ', k.key, count(k.key) AS n FROM ' + ATable + ' x' +
+        ' LEFT JOIN LATERAL jsonb_object_keys(CASE WHEN jsonb_typeof(x.properties) = ''object''' +
+        ' THEN x.properties ELSE ''{}''::jsonb END) AS k(key) ON true' +
+        ' WHERE x.entidad = :entidad AND (:lbl = '''' OR lower(x.' + ALabelColumn + ') = lower(:lbl))' +
+        ' GROUP BY x.' + ALabelColumn + ', k.key';
+      Query.ParamByName('entidad').AsWideString := FCurrentEntidad;
+      Query.ParamByName('lbl').AsWideString := ALabel;
+      Query.Open;
+      while not Query.Eof do
+      begin
+        Lbl := Query.Fields[0].AsString;
+        if not AMap.TryGetValue(Lbl, Counts) then
+        begin
+          Counts := TDictionary<string, Integer>.Create;
+          AMap.Add(Lbl, Counts);
+        end;
+        if not Query.Fields[1].IsNull then
+          Counts.AddOrSetValue(Query.Fields[1].AsString, Query.Fields[2].AsInteger);
+        Query.Next;
+      end;
+    finally
+      Query.Free;
+    end;
+  end;
+
+begin
+  Fill(FNodesTableName, 'node_label', ANodeProps);
+  Fill(FEdgesTableName, 'edge_label', AEdgeProps);
+  Result := True;
 end;
 
 function TAiRagGraphPostgresDriver.GetUniqueEdgeLabels: TArray<string>;
