@@ -266,7 +266,6 @@ const
     'rag.no_on_get_embedding',            'The OnGetEmbedding event is not assigned; the embedding cannot be generated.',
     'rag.overlap_range',                  'The overlap percentage must be between 0 and 99.',
     'rag.pg.error',                       'Postgres error: %s',
-    'rag.pg.exists_array',                'foExistsAny / foExistsAll needs an array of values.',
     'rag.pg.no_connection',               'Critical error: the Postgres driver has no connection assigned.',
     'rag.query_no_vector',                'Error: the query did not produce a valid vector. Check the embeddings engine.',
     'rag.rerank_count',                   'RerankWith: the reranker returned %d scores for %d candidates',

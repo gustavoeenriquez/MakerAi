@@ -261,7 +261,6 @@ const
     'rag.no_on_get_embedding',            'O evento OnGetEmbedding não está atribuído; não é possível gerar o embedding.',
     'rag.overlap_range',                  'A porcentagem de overlap deve estar entre 0 e 99.',
     'rag.pg.error',                       'Erro do Postgres: %s',
-    'rag.pg.exists_array',                'foExistsAny / foExistsAll exige um array de valores.',
     'rag.pg.no_connection',               'Erro crítico: o driver do Postgres não tem conexão atribuída.',
     'rag.query_no_vector',                'Erro: a consulta não gerou um vetor válido. Verifique o mecanismo de embeddings.',
     'rag.rerank_count',                   'RerankWith: o reranker retornou %d pontuações para %d candidatos',

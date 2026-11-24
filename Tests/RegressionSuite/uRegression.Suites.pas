@@ -589,6 +589,25 @@ begin
     .Input('rag:vql:no-leak')
     .ExpectEquals('bloques=0');
 
+  // VQL fase 5 (nov 24/2026): EXPLAIN muestra el WHERE compilado (con los $x resueltos) y las
+  // filas de mas que se piden; el contexto para el LLM no depende del separador decimal de
+  // Windows (Score: 1,0000 y precio: 150,75 con coma) y los metadatos salen en orden fijo;
+  // DISTINCT ON trae candidatos de mas (antes LIMIT 3 con dos 'activo' entre los 3 primeros
+  // devolvia 2)
+  FRunner.AddCase('rag.vql.explain')
+    .Input('rag:vql:explain')
+    .ExpectEquals('Where     : estado = ''activo'' AND (precio > 150.5 OR NOT (codigo IN (''9'', ''10''))) AND ' +
+      'autor NOT LIKE ''B%'' AND NOT (EXISTS(borrado)) AND fecha >= ''2026-11-24''|' +
+      'Fetch     : 15 candidates (extra rows for RERANK, DISTINCT or OFFSET)|Where     : (none)|sin fetch');
+
+  FRunner.AddCase('rag.vql.context')
+    .Input('rag:vql:context')
+    .ExpectEquals('[Score: 1.0000 | autor: Dario | fecha: 2026-11-24 | precio: 150.75 | tags: ["a",2.5]]');
+
+  FRunner.AddCase('rag.vql.distinct')
+    .Input('rag:vql:distinct')
+    .ExpectEquals('3:,activo,borrador|2:activo,borrador');
+
   FRunner.AddCase('rag.search.nil-options')
     .Input('rag:search-nil-options')
     .ExpectEquals('1');
@@ -6022,6 +6041,82 @@ begin
         Result := 'bloques=0'
       else
         Result := 'fugas:' + Fugas;
+    end
+
+    else if Id = 'explain' then
+    begin
+      SavedDecimal := FormatSettings.DecimalSeparator;
+      FormatSettings.DecimalSeparator := ',';
+      try
+        Txt := V.ExecuteVQL('EXPLAIN SEARCH ''x'' WHERE estado = ''activo'' AND (precio > 150.5 OR ' +
+          'NOT (codigo IN (''9'', ''10''))) AND autor NOT LIKE ''B%'' AND NOT EXISTS(borrado) ' +
+          'AND fecha >= $f DISTINCT ON estado LIMIT 5', ['f', '2026-11-24']);
+        Result := '';
+        for var Line in Txt.Split([#13#10, #10]) do
+          if Line.StartsWith('Where') or Line.StartsWith('Fetch') then
+            Result := Result + Line + '|';
+        Txt := V.ExecuteVQL('EXPLAIN SEARCH ''x'' LIMIT 5');
+        for var Line in Txt.Split([#13#10, #10]) do
+          if Line.StartsWith('Where') then
+            Result := Result + Line + '|';
+        if Txt.Contains('Fetch') then
+          Result := Result + 'con fetch'
+        else
+          Result := Result + 'sin fetch';
+      finally
+        FormatSettings.DecimalSeparator := SavedDecimal;
+      end;
+    end
+
+    else if Id = 'context' then
+    begin
+      // Fecha, decimal y lista en los metadatos, con coma decimal en Windows
+      M := TAiEmbeddingMetaData.Create;
+      try
+        M['tags'] := VarArrayOf(['a', 2.5]);
+        M['fecha'] := EncodeDate(2026, 11, 24);
+        V.Items[3].MetaData['tags'] := M['tags'];
+        V.Items[3].MetaData['fecha'] := M['fecha'];
+      finally
+        M.Free;
+      end;
+      SavedDecimal := FormatSettings.DecimalSeparator;
+      FormatSettings.DecimalSeparator := ',';
+      try
+        Txt := V.ExecuteVQL('SEARCH ''x'' WHERE autor = ''Dario'' RETURN METADATA, SCORE LIMIT 1');
+        Result := Txt.Split([#13#10, #10])[0];
+        // Sin el ID (un GUID distinto en cada corrida)
+        I := Pos(' | ID: ', Result);
+        if I > 0 then
+          Delete(Result, I, Pos(' | ', Result, I + 3) - I);
+      finally
+        FormatSettings.DecimalSeparator := SavedDecimal;
+      end;
+    end
+
+    else if Id = 'distinct' then
+    begin
+      // Los 3 primeros por relevancia (empate: orden de alta) son Ana, Bruno y carla: dos 'activo'
+      Result := '';
+      Repertorio := ['SEARCH ''x'' DISTINCT ON estado LIMIT 3', 'SEARCH ''x'' WHERE EXISTS(estado) DISTINCT ON estado LIMIT 3'];
+      for Txt in Repertorio do
+      begin
+        var R: TAiRAGVector := nil;
+        var L := TStringList.Create;
+        try
+          V.ExecuteVQL(Txt, R);
+          for I := 0 to R.Count - 1 do
+            L.Add(VarToStr(R.Items[I].MetaData.Get('estado', '')));
+          L.Sort;
+          L.StrictDelimiter := True;
+          if Result <> '' then
+            Result := Result + '|';
+          Result := Result + IntToStr(R.Count) + ':' + L.CommaText;
+        finally
+          L.Free;
+          R.Free;
+        end;
+      end;
     end
 
     else if Id = 'options' then

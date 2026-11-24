@@ -85,6 +85,8 @@ LIMIT 10
 
 **Syntax (nov 24/2026):** clauses after `SEARCH` in any order; quotes are written twice (`'O''Brien'`), backslashes are plain characters; `--`, `//` and `/* */` comments; `EXISTS(field)`, `field EXISTS_ANY (...)`; parameters `$x` with `Rag.ExecuteVQL(vql, ['x', value])` (the value never goes through the parser: use them for anything a user or a model types). This demo runs the VQL typed in the prompt as is, without parameters.
 
+**`EXPLAIN` (nov 24/2026):** `EXPLAIN SEARCH ...` also prints the compiled `WHERE` (parameters resolved) and the number of candidates fetched for `RERANK`/`DISTINCT`/`OFFSET`. The grammar to paste into the system prompt of a model that writes VQL is `Source/RAG/MakerVQL_SystemPrompt.md`.
+
 Errors raise `EVGQLParserError` (lexer/parse) or `EVGQLTranslationError` (compile).
 
 ## Key MakerAI Framework Classes

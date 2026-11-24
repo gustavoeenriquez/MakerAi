@@ -1163,10 +1163,28 @@ end;
   parseo a codigos HTTP) y no quiere reimplementar el pipeline: reimplementarlo
   significa perder en silencio toda clausula que no se copie a mano.
   El request NO se libera aqui: es del llamador. }
-function TAiRAGVector.ExecuteRequest(ARequest: TVGQLRequest; out AResultVector: TAiRAGVector): string;
 const
   OVERFETCH_FACTOR = 3;
   OVERFETCH_MAX    = 100;
+
+// Cuantos candidatos pide la busqueda para entregar LIMIT despues del post-proceso:
+// - RERANK: reordenar el top-K no rescata lo que quedo fuera, se traen mas (x3, hasta 100).
+// - OFFSET: se salta sobre lo ya traido; sin esas filas de mas la segunda pagina salia
+//   corta y la ultima, vacia.
+// - DISTINCT: los duplicados se descartan despues; sin traer de mas, "DISTINCT ON autor
+//   LIMIT 5" devolvia 1 resultado si los 5 primeros eran del mismo autor.
+function VqlFetchLimit(AReq: TVGQLRequest): Integer;
+begin
+  Result := AReq.Limit;
+  if Result <= 0 then
+    Exit;
+  if (AReq.RerankQuery <> '') or (AReq.DistinctField <> '') then
+    Result := Max(Result, Min((AReq.Limit + AReq.Offset) * OVERFETCH_FACTOR, OVERFETCH_MAX));
+  if AReq.Offset > 0 then
+    Result := Max(Result, AReq.Limit + AReq.Offset);
+end;
+
+function TAiRAGVector.ExecuteRequest(ARequest: TVGQLRequest; out AResultVector: TAiRAGVector): string;
 var
   Req: TVGQLRequest;
   TempOptions: TAiSearchOptions;
@@ -1242,15 +1260,7 @@ begin
       // Reordenar el top-K que ya trajo la busqueda no puede rescatar lo que se
       // quedo fuera de ese top-K. Cuando hay segunda etapa se traen mas
       // candidatos y se recorta al LIMIT pedido al final (paso 9b).
-      SearchLimit := Req.Limit;
-      if (Req.RerankQuery <> '') and (SearchLimit > 0) then
-        SearchLimit := Min(SearchLimit * OVERFETCH_FACTOR, OVERFETCH_MAX);
-
-      // OFFSET se aplica sobre el resultado ya traido (paso 9). Sin pedir esas
-      // filas de mas, saltar N devolvia LIMIT-N resultados en vez de LIMIT, o
-      // sea que la segunda pagina salia corta y la ultima, vacia.
-      if (Req.Offset > 0) and (Req.Limit > 0) then
-        SearchLimit := Max(SearchLimit, Req.Limit + Req.Offset);
+      SearchLimit := VqlFetchLimit(Req);
 
       AResultVector := Self.SearchWith(Req.Query, SearchLimit, Req.MinGlobal, Req.Filter, TempOptions, QueryEntidad);
 
@@ -1670,7 +1680,7 @@ begin
       FusionStr := 'Weighted Score Fusion, from SearchOptions';
 
     if AReq.UseMMR then
-      OptimStr := Format('MMR (lambda=%.2f)', [AReq.MmrLambda])
+      OptimStr := Format('MMR (lambda=%.2f)', [AReq.MmrLambda], TFormatSettings.Invariant)
     else if AReq.UseReorderABC then
       OptimStr := 'REORDER ABC'
     else
@@ -1701,14 +1711,23 @@ begin
     SB.AppendLine('Fusion    : ' + FusionStr);
     if AReq.LanguageSpecified then
       SB.AppendLine('Language  : ' + AReq.Language + ' (the BM25 index language is set when indexing)');
+    // El filtro tal como quedo compilado (con los parametros $x ya resueltos): antes EXPLAIN no
+    // mostraba el WHERE y no habia forma de ver como se agrupaban AND, OR y NOT
+    if Assigned(AReq.Filter) and (AReq.Filter.Count > 0) then
+      SB.AppendLine('Where     : ' + AiFilterCriteriaToText(AReq.Filter))
+    else
+      SB.AppendLine('Where     : (none)');
     SB.AppendLine('Rerank    : ' + IfThen(AReq.RerankQuery <> '', AReq.RerankQuery, '(none)'));
     if AReq.MinGlobal > 0 then
-      SB.AppendLine(Format('Threshold : GLOBAL %.4f', [AReq.MinGlobal]));
+      SB.AppendLine(Format('Threshold : GLOBAL %.4f', [AReq.MinGlobal], TFormatSettings.Invariant));
     if AReq.MinSemantic > 0 then
-      SB.AppendLine(Format('Threshold : SEMANTIC %.4f', [AReq.MinSemantic]));
+      SB.AppendLine(Format('Threshold : SEMANTIC %.4f', [AReq.MinSemantic], TFormatSettings.Invariant));
     if AReq.MinLexical > 0 then
-      SB.AppendLine(Format('Threshold : LEXICAL %.4f', [AReq.MinLexical]));
+      SB.AppendLine(Format('Threshold : LEXICAL %.4f', [AReq.MinLexical], TFormatSettings.Invariant));
     SB.AppendLine(Format('Limit     : %d / Offset: %d', [AReq.Limit, AReq.Offset]));
+    if VqlFetchLimit(AReq) <> AReq.Limit then
+      SB.AppendLine(Format('Fetch     : %d candidates (extra rows for RERANK, DISTINCT or OFFSET)',
+        [VqlFetchLimit(AReq)]));
     SB.AppendLine('Distinct  : ' + IfThen(AReq.DistinctField <> '', AReq.DistinctField, '(none)'));
     SB.AppendLine('Order By  : ' + OrderStr);
     SB.AppendLine('Optimize  : ' + OptimStr);
@@ -1718,13 +1737,37 @@ begin
   end;
 end;
 
+// Agrega "| clave: valor" de cada metadato, en orden alfabetico (TDictionary no guarda el orden
+// y el contexto cambiaba de una ejecucion a otra) y con AiMetaValueToText (sin depender del idioma)
+procedure AppendMetaDataText(SB: TStringBuilder; AMeta: TAiEmbeddingMetaData; var AHasContent: Boolean);
+var
+  Keys: TArray<string>;
+  K: string;
+begin
+  if not Assigned(AMeta) then
+    Exit;
+  Keys := AMeta.InternalDictionary.Keys.ToArray;
+  TArray.Sort<string>(Keys);
+  for K in Keys do
+  begin
+    if AHasContent then
+      SB.Append(' | ');
+    SB.Append(K + ': ' + AiMetaValueToText(AMeta.InternalDictionary[K]));
+    AHasContent := True;
+  end;
+end;
+
+function AiScoreText(const AScore: Double): string;
+begin
+  Result := 'Score: ' + FormatFloat('0.0000', AScore, TFormatSettings.Invariant);
+end;
+
 function TAiRAGVector.BuildExtendedContextText(DataVec: TAiRAGVector; AReq: TVGQLRequest): string;
 // Like VectorToContextText but also emits ID, RANK, MODEL fields when requested.
 var
   i: Integer;
   Emb: TAiEmbeddingNode;
   SB: TStringBuilder;
-  Pair: TPair<string, Variant>;
   HasContent: Boolean;
 begin
   if (DataVec = nil) or (DataVec.Count = 0) then
@@ -1751,7 +1794,7 @@ begin
         if AReq.IncludeScore then
         begin
           if HasContent then SB.Append(' | ');
-          SB.AppendFormat('Score: %.4f', [Emb.Idx]);
+          SB.Append(AiScoreText(Emb.Idx));
           HasContent := True;
         end;
 
@@ -1778,15 +1821,7 @@ begin
             SB.Append('ID: ' + Emb.Tag);
             HasContent := True;
           end;
-          if Assigned(Emb.MetaData) then
-          begin
-            for Pair in Emb.MetaData.InternalDictionary do
-            begin
-              if HasContent then SB.Append(' | ');
-              SB.Append(Pair.Key + ': ' + VarToStr(Pair.Value));
-              HasContent := True;
-            end;
-          end;
+          AppendMetaDataText(SB, Emb.MetaData, HasContent);
         end;
 
         SB.AppendLine(']');
@@ -2609,7 +2644,6 @@ var
   i: Integer;
   Emb: TAiEmbeddingNode;
   SB: TStringBuilder;
-  Pair: TPair<string, Variant>;
   HasContentBefore: Boolean;
 begin
   if (DataVec = nil) or (DataVec.Count = 0) then
@@ -2630,7 +2664,7 @@ begin
         // A. Mostrar Score si se solicit�
         if IncludeScore then
         begin
-          SB.AppendFormat('Score: %.4f', [Emb.Idx]);
+          SB.Append(AiScoreText(Emb.Idx));
           HasContentBefore := True;
         end;
 
@@ -2649,16 +2683,7 @@ begin
           end;
 
           // Diccionario de propiedades
-          if Assigned(Emb.MetaData) then
-          begin
-            for Pair in Emb.MetaData.InternalDictionary do
-            begin
-              if HasContentBefore then
-                SB.Append(' | ');
-              SB.Append(Pair.Key + ': ' + VarToStr(Pair.Value));
-              HasContentBefore := True;
-            end;
-          end;
+          AppendMetaDataText(SB, Emb.MetaData, HasContentBefore);
         end;
 
         SB.AppendLine(']');

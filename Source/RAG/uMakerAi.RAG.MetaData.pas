@@ -176,6 +176,14 @@ function AiLikeMatch(const AText, APattern: string; ACaseInsensitive: Boolean): 
 // Texto de un valor para CONTAINS/LIKE: números con punto decimal sin importar el idioma
 function AiFilterValueToText(const V: Variant): string;
 
+// Texto de un valor de metadato para el contexto del LLM: números con punto decimal, fechas ISO
+// (yyyy-mm-dd, con la hora si la tiene) y listas como JSON, sin depender del idioma de Windows.
+// Antes VarToStr: 42000,5 y 24/11/2026 en un Windows en español, y una lista lanzaba excepción
+function AiMetaValueToText(const V: Variant): string;
+
+// El filtro escrito como un WHERE de VQL (para EXPLAIN): estado = 'activo' AND (a > 1 OR ...)
+function AiFilterCriteriaToText(ACriteria: TAiFilterCriteria): string;
+
 implementation
 
 type
@@ -254,6 +262,126 @@ begin
   if (not AiIsTextType(V)) and (not AiIsIntType(V)) and AiTryNumber(V, D, IsNum) and IsNum then
     Exit(FloatToStr(D, TFormatSettings.Invariant));
   Result := VarToStr(V);
+end;
+
+function AiVariantToJSON(const V: Variant): TJSONValue; forward;
+
+function AiMetaValueToText(const V: Variant): string;
+var
+  J: TJSONValue;
+  D: TDateTime;
+begin
+  if VarIsNull(V) or VarIsEmpty(V) then
+    Exit('');
+  if VarIsArray(V) then
+  begin
+    J := AiVariantToJSON(V);
+    try
+      Exit(J.ToJSON);
+    finally
+      J.Free;
+    end;
+  end;
+  case VarType(V) and varTypeMask of
+    varDate:
+      begin
+        D := VarToDateTime(V);
+        if Frac(D) = 0 then
+          Exit(FormatDateTime('yyyy-mm-dd', D))
+        else
+          Exit(FormatDateTime('yyyy-mm-dd"T"hh:nn:ss', D));
+      end;
+    varSingle, varDouble, varCurrency:
+      Exit(FloatToStr(Double(V), TFormatSettings.Invariant));
+  end;
+  Result := VarToStr(V);
+end;
+
+function AiFilterLiteralToText(const V: Variant): string;
+var
+  i: Integer;
+begin
+  if VarIsNull(V) or VarIsEmpty(V) then
+    Exit('NULL');
+  if VarIsArray(V) then
+  begin
+    Result := '';
+    for i := VarArrayLowBound(V, 1) to VarArrayHighBound(V, 1) do
+    begin
+      if Result <> '' then
+        Result := Result + ', ';
+      Result := Result + AiFilterLiteralToText(V[i]);
+    end;
+    Exit('(' + Result + ')');
+  end;
+  case VarType(V) and varTypeMask of
+    varBoolean:
+      if Boolean(V) then Exit('TRUE') else Exit('FALSE');
+    varSmallint, varInteger, varShortInt, varByte, varWord, varLongWord, varInt64, varUInt64,
+    varSingle, varDouble, varCurrency:
+      Exit(AiMetaValueToText(V));
+  end;
+  Result := QuotedStr(AiMetaValueToText(V));
+end;
+
+function AiFilterCriterionToText(const C: TFilterCriterion): string;
+const
+  OPS: array[TFilterOperator] of string = ('=', '<>', '>', '>=', '<', '<=', 'CONTAINS', 'STARTS_WITH',
+    'ENDS_WITH', 'LIKE', 'ILIKE', 'IN', 'NOT IN', 'BETWEEN', 'IS NULL', 'IS NOT NULL', 'EXISTS',
+    'EXISTS_ANY', 'EXISTS_ALL');
+var
+  NotStr: string;
+begin
+  if C.IsGroup then
+  begin
+    Result := '(' + AiFilterCriteriaToText(C.SubCriteria) + ')';
+    if C.Negated then
+      Result := 'NOT ' + Result;
+    Exit;
+  end;
+  if C.Negated then
+    NotStr := 'NOT '
+  else
+    NotStr := '';
+  case C.Op of
+    foExists:
+      Result := NotStr + 'EXISTS(' + C.Key + ')';
+    foIsNull, foIsNotNull:
+      if C.Negated then
+        Result := 'NOT (' + C.Key + ' ' + OPS[C.Op] + ')'
+      else
+        Result := C.Key + ' ' + OPS[C.Op];
+    foBetween:
+      Result := C.Key + ' ' + NotStr + 'BETWEEN ' + AiFilterLiteralToText(C.Value) + ' AND ' +
+        AiFilterLiteralToText(C.Value2);
+    foEqual, foNotEqual, foGreater, foGreaterOrEqual, foLess, foLessOrEqual:
+      if C.Negated then
+        Result := 'NOT (' + C.Key + ' ' + OPS[C.Op] + ' ' + AiFilterLiteralToText(C.Value) + ')'
+      else
+        Result := C.Key + ' ' + OPS[C.Op] + ' ' + AiFilterLiteralToText(C.Value);
+  else
+    Result := C.Key + ' ' + NotStr + OPS[C.Op] + ' ' + AiFilterLiteralToText(C.Value);
+  end;
+end;
+
+function AiFilterCriteriaToText(ACriteria: TAiFilterCriteria): string;
+var
+  i: Integer;
+  Sep: string;
+begin
+  Result := '';
+  if not Assigned(ACriteria) then
+    Exit;
+  if ACriteria.LogicalOp = loOr then
+    Sep := ' OR '
+  else
+    Sep := ' AND ';
+  for i := 0 to ACriteria.Count - 1 do
+  begin
+    if i > 0 then
+      Result := Result + Sep;
+    Result := Result + AiFilterCriterionToText(ACriteria[i]);
+  end;
 end;
 
 function AiCompareValues(const A, B: Variant; out ACmp: Integer): Boolean;
