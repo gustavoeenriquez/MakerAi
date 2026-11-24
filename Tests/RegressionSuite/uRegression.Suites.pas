@@ -36,6 +36,7 @@ type
     function RunPolicyScenario(const AScenario: string): string;
     function RunRagScenario(const AScenario: string): string;
     function RunGqlScenario(const AScenario: string): string;
+    function RunVqlScenario(const AScenario: string): string;
     // TAiMemory: aislamiento entre namespaces en las operaciones por Id
     function RunMemoryScenario(const AScenario: string): string;
     // Skills: formato SKILL.md, carpetas y registry PPM (falso, sin red)
@@ -520,6 +521,38 @@ begin
   FRunner.AddCase('rag.vql.samples')
     .Input('rag:vql-samples')
     .ExpectEquals('ok|ok|ok|error');
+
+  // VQL fase 1 (nov 24/2026): resultados correctos. Antes NOT LIKE/BETWEEN/CONTAINS perdian el
+  // NOT y devolvian lo contrario; '>=' y '<=' sobre texto nunca se cumplian; '10' > 9 comparaba
+  // como texto; LIKE no distinguia mayusculas y tomaba '*' como comodin; 'WHERE campo' se
+  // ignoraba; cada VQL pisaba las SearchOptions del componente
+  FRunner.AddCase('rag.vql.not')
+    .Input('rag:vql:not')
+    .ExpectEquals('Ana,carla|Ana,carla|Ana,carla|Bruno|Bruno|Bruno,Dario|Bruno,Dario');
+
+  FRunner.AddCase('rag.vql.compare')
+    .Input('rag:vql:compare')
+    .ExpectEquals('Bruno,carla,Dario|Ana,Bruno|Ana,carla|Ana,carla||Ana|Bruno|Dario');
+
+  FRunner.AddCase('rag.vql.like')
+    .Input('rag:vql:like')
+    .ExpectEquals('|Ana|Bruno||Ana,carla,Dario|carla,Dario');
+
+  FRunner.AddCase('rag.vql.errors')
+    .Input('rag:vql:errors')
+    .ExpectEquals('error|error|error|error|error|Ana,carla');
+
+  FRunner.AddCase('rag.vql.orderby')
+    .Input('rag:vql:orderby')
+    .ExpectEquals('Bruno,Ana,carla,Dario|carla,Ana,Bruno,Dario|carla,Bruno,Dario,Ana|carla,Bruno,Dario');
+
+  FRunner.AddCase('rag.vql.decimal')
+    .Input('rag:vql:decimal')
+    .ExpectEquals('Bruno,carla,Dario|Dario');
+
+  FRunner.AddCase('rag.vql.options')
+    .Input('rag:vql:options')
+    .ExpectEquals('rrf=True|bm25=False|min=0.3|abc=False|entidad=propia|score=1');
 
   FRunner.AddCase('rag.search.nil-options')
     .Input('rag:search-nil-options')
@@ -5618,6 +5651,197 @@ end;
 // del idioma) y lo nuevo de la fase 2 (parametros, BETWEEN, STARTS/ENDS WITH, NOT, XOR,
 // negativos, escapes, comentarios, ;, `nombres`, r.weight). Cada consulta devuelve los
 // nombres de los nodos de todas las filas, sin repetir y ordenados; 'error:<Clase>' si falla.
+// VQL (revision nov 24/2026, fase 1): cuatro documentos con metadatos y embeddings iguales (todos
+// puntuan 1), asi lo que decide el resultado es el WHERE. Dario no tiene 'estado' ni 'codigo'.
+// Cada consulta da los autores en orden alfabetico (o en el orden del resultado con '>' delante
+// del VQL); un error da 'error'. Los resultados se unen con '|'.
+function TRegressionSuite.RunVqlScenario(const AScenario: string): string;
+var
+  Id: string;
+  Handlers: TFixtureHandlers;
+  Emb: TAiEmbeddingsCore;
+  V: TAiRAGVector;
+
+  procedure AddDoc(const AText, AAutor, AEstado, ACodigo: string; APrecio: Variant);
+  var
+    M: TAiEmbeddingMetaData;
+  begin
+    M := TAiEmbeddingMetaData.Create;
+    try
+      M['autor'] := AAutor;
+      if AEstado <> '' then
+        M['estado'] := AEstado;
+      if ACodigo <> '' then
+        M['codigo'] := ACodigo;
+      M['precio'] := APrecio;
+      V.AddItem(AText, M);
+    finally
+      M.Free;
+    end;
+  end;
+
+  function Q(const AVql: string): string;
+  var
+    R: TAiRAGVector;
+    L: TStringList;
+    I: Integer;
+    Ordered: Boolean;
+    Vql: string;
+  begin
+    Ordered := AVql.StartsWith('>');
+    Vql := AVql;
+    if Ordered then
+      Vql := AVql.Substring(1);
+    R := nil;
+    L := TStringList.Create;
+    try
+      try
+        V.ExecuteVQL(Vql, R);
+        if Assigned(R) then
+          for I := 0 to R.Count - 1 do
+            L.Add(VarToStr(R.Items[I].MetaData['autor']));
+        if not Ordered then
+          L.Sort;
+        L.StrictDelimiter := True;
+        Result := L.CommaText;
+      except
+        Result := 'error';
+      end;
+    finally
+      L.Free;
+      R.Free;
+    end;
+  end;
+
+  function All(const AQueries: array of string): string;
+  var
+    I: Integer;
+  begin
+    Result := '';
+    for I := 0 to High(AQueries) do
+    begin
+      if I > 0 then
+        Result := Result + '|';
+      Result := Result + Q(AQueries[I]);
+    end;
+  end;
+
+var
+  SavedDecimal: Char;
+  SavedEntidad, Txt: string;
+begin
+  Id := AScenario.Substring(Length('rag:vql:'));
+  Handlers := TFixtureHandlers.Create;
+  Emb := TAiEmbeddingsCore.Create(nil);
+  V := TAiRAGVector.Create(nil);
+  try
+    Emb.Model := 'fake';
+    Emb.Dimensions := 4;
+    Emb.OnGetEmbedding := Handlers.FakeEmbedding;
+    V.InMemoryIndexType := TAIBasicIndex;
+    V.Embeddings := Emb;
+    AddDoc('uno', 'Ana', 'activo', '10', 100);
+    AddDoc('dos', 'Bruno', 'borrador', '9', 200);
+    AddDoc('tres', 'carla', 'activo', '25', 300);
+    AddDoc('cuatro', 'Dario', '', '', 150.75);
+
+    if Id = 'not' then
+      // NOT pospuesto: un campo que falta no se cumple ni negado (Dario), como en SQL.
+      // NOT antepuesto: niega el grupo entero (Dario si entra)
+      Result := All([
+        'SEARCH ''x'' WHERE estado NOT LIKE ''borr%''',
+        'SEARCH ''x'' WHERE precio NOT BETWEEN 150 AND 250',
+        'SEARCH ''x'' WHERE estado NOT CONTAINS ''BORR''',
+        'SEARCH ''x'' WHERE estado NOT STARTS_WITH ''act''',
+        'SEARCH ''x'' WHERE estado NOT IN (''activo'')',
+        'SEARCH ''x'' WHERE NOT (estado = ''activo'' OR precio > 250)',
+        'SEARCH ''x'' WHERE NOT estado = ''activo'' AND precio < 300'])
+
+    else if Id = 'compare' then
+      Result := All([
+        'SEARCH ''x'' WHERE autor >= ''B''',
+        'SEARCH ''x'' WHERE autor <= ''Bz''',
+        'SEARCH ''x'' WHERE codigo > 9',
+        'SEARCH ''x'' WHERE codigo > ''9''',
+        'SEARCH ''x'' WHERE autor = ''ana''',
+        'SEARCH ''x'' WHERE autor = ''Ana''',
+        'SEARCH ''x'' WHERE autor IN (''ana'', ''Bruno'')',
+        'SEARCH ''x'' WHERE precio = 150.75'])
+
+    else if Id = 'like' then
+      // LIKE distingue mayusculas, ILIKE no; solo % y _ son comodines (antes, MatchesMask)
+      Result := All([
+        'SEARCH ''x'' WHERE autor LIKE ''a%''',
+        'SEARCH ''x'' WHERE autor ILIKE ''a%''',
+        'SEARCH ''x'' WHERE autor LIKE ''_runo''',
+        'SEARCH ''x'' WHERE autor LIKE ''A*''',
+        'SEARCH ''x'' WHERE autor LIKE ''%a%''',
+        'SEARCH ''x'' WHERE autor CONTAINS ''AR'''])
+
+    else if Id = 'errors' then
+      // Antes se ignoraban en silencio (sin filtro, LIMIT por defecto) o reventaban con
+      // EConvertError
+      Result := All([
+        'SEARCH ''x'' WHERE estado',
+        'SEARCH ''x'' WHERE precio > 1.2.3',
+        'SEARCH ''x'' LIMIT 0',
+        'SEARCH ''x'' LIMIT 1.5',
+        'SEARCH ''x'' WHERE estado NOT = ''activo''',
+        'SEARCH ''x'' WHERE estado = ''activo'' LIMIT 2'])
+
+    else if Id = 'orderby' then
+      // Numeros guardados como texto ordenan como numeros; lo que falta, al final
+      Result := All([
+        '>SEARCH ''x'' ORDER BY codigo',
+        '>SEARCH ''x'' ORDER BY codigo DESC',
+        '>SEARCH ''x'' ORDER BY precio DESC',
+        '>SEARCH ''x'' WHERE precio > 120 ORDER BY estado, autor DESC'])
+
+    else if Id = 'decimal' then
+    begin
+      // El separador decimal de Windows no cambia los literales: antes, con coma, 150.5 era 0
+      SavedDecimal := FormatSettings.DecimalSeparator;
+      FormatSettings.DecimalSeparator := ',';
+      try
+        Result := All([
+          'SEARCH ''x'' WHERE precio > 150.5',
+          'SEARCH ''x'' WHERE precio BETWEEN 150.5 AND 150.8'])
+      finally
+        FormatSettings.DecimalSeparator := SavedDecimal;
+      end;
+    end
+
+    else if Id = 'options' then
+    begin
+      // VQL no toca la configuracion del componente; sin USING usa la del componente
+      V.SearchOptions.UseRRF := True;
+      V.SearchOptions.UseBM25 := False;
+      V.SearchOptions.MinAbsoluteScoreEmbedding := 0.3;
+      V.SearchOptions.UseReorderABC := False;
+      V.Entidad := 'propia';
+      SavedEntidad := V.Entidad;
+      V.ExecuteVQL('MATCH (otra) SEARCH ''x'' USING HYBRID WITH WEIGHTS(0.5, 0.5) FUSION WEIGHTED ' +
+        'THRESHOLD SEMANTIC 0.2 OPTIMIZE REORDER ABC LIMIT 2');
+      Result := Format('rrf=%s|bm25=%s|min=%s|abc=%s|entidad=%s', [BoolToStr(V.SearchOptions.UseRRF, True),
+        BoolToStr(V.SearchOptions.UseBM25, True), FloatToStr(V.SearchOptions.MinAbsoluteScoreEmbedding, TFormatSettings.Invariant),
+        BoolToStr(V.SearchOptions.UseReorderABC, True), V.Entidad]);
+      // Sin USING, una coincidencia perfecta puntua 1 (antes el hibrido forzado la bajaba a 0.7)
+      Txt := V.ExecuteVQL('SEARCH ''x'' RETURN SCORE LIMIT 1');
+      if Txt.Contains('Score: 1.0000') or Txt.Contains('Score: 1,0000') then
+        Result := Result + '|score=1'
+      else
+        Result := Result + '|score=' + Txt;
+    end
+
+    else
+      Result := 'escenario desconocido: ' + Id;
+  finally
+    V.Free;
+    Emb.Free;
+    Handlers.Free;
+  end;
+end;
+
 function TRegressionSuite.RunGqlScenario(const AScenario: string): string;
 var
   Handlers: TFixtureHandlers;
@@ -6002,6 +6226,8 @@ var
 begin
   if AScenario.StartsWith('rag:gql:') then
     Exit(RunGqlScenario(AScenario));
+  if AScenario.StartsWith('rag:vql:') then
+    Exit(RunVqlScenario(AScenario));
 
   // Borrado de nodos y aristas: DeleteNode(AID) liberaba las aristas sin sacarlas del nodo
   // vecino (quedaba apuntando a memoria liberada); DeleteNode(ANode) no avisaba al driver;

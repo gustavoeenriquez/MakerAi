@@ -433,7 +433,16 @@ begin
       begin
         // RECURSIVIDAD: Llamamos a Process para el subgrupo
         SubSQL := Process(Criterion.SubCriteria);
-        if SubSQL <> '' then
+        // Grupo negado NOT ( ... ): CASE lo vuelve verdadero/falso (un NULL adentro cuenta como falso,
+        // igual que en memoria) y despues se niega
+        if Criterion.Negated then
+        begin
+          if SubSQL = '' then
+            SQLParts.Add('(1=0)')
+          else
+            SQLParts.Add('(CASE WHEN (' + SubSQL + ') THEN 1 ELSE 0 END = 0)');
+        end
+        else if SubSQL <> '' then
           SQLParts.Add('(' + SubSQL + ')');
       end
       else
@@ -446,6 +455,8 @@ begin
         try
           if Criterion.Op = foBetween then
             Cond.SecondValue := Criterion.Value2;
+          // NOT LIKE, NOT BETWEEN...: NOT ( ... ); un campo que falta da NULL y no se cumple
+          Cond.FIsNegated := Criterion.Negated;
 
           // 2. Llamada CORREGIDA: Pasamos FParams en lugar de FQuery
           // Esto genera el fragmento SQL y guarda el valor en la lista diferida

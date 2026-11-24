@@ -129,11 +129,23 @@ TBinaryOperator = (
     FLeft: TExpression;
     FOperator: TBinaryOperator;
     FRight: TExpression;
+    FNegated: Boolean;
   public
     destructor Destroy; override;
     property Left: TExpression read FLeft write FLeft;
     property Operator: TBinaryOperator read FOperator write FOperator;
     property Right: TExpression read FRight write FRight;
+    // NOT pospuesto: campo NOT LIKE / NOT ILIKE / NOT CONTAINS / NOT STARTS_WITH / NOT ENDS_WITH
+    property Negated: Boolean read FNegated write FNegated;
+  end;
+
+  // NOT antepuesto: NOT condicion, NOT ( ... )
+  TNotExpression = class(TExpression)
+  private
+    FOperand: TExpression;
+  public
+    destructor Destroy; override;
+    property Operand: TExpression read FOperand write FOperand;
   end;
 
 
@@ -156,11 +168,13 @@ TBinaryOperator = (
     FLeft: TExpression;
     FMin: TExpression;
     FMax: TExpression;
+    FNegated: Boolean;
   public
     destructor Destroy; override;
     property Left: TExpression read FLeft write FLeft;
     property Min: TExpression read FMin write FMin;
     property Max: TExpression read FMax write FMax;
+    property Negated: Boolean read FNegated write FNegated; // NOT BETWEEN
   end;
 
   // ===== CLAUSULAS =====
@@ -351,6 +365,7 @@ TBinaryOperator = (
     function ParseExpression: TExpression;
     function ParseOr: TExpression;
     function ParseAnd: TExpression;
+    function ParseNot: TExpression;
     function ParseComparison: TExpression;
     function ParsePrimary: TExpression;
   public
@@ -385,6 +400,10 @@ TBinaryOperator = (
     // ejecuta el request no sabe si puede imponer su propio default.
     FusionSpecified: Boolean;
     LanguageSpecified: Boolean;
+    // USING / OPTIMIZE escritos en el VQL. Sin USING la consulta usa las SearchOptions del
+    // componente; con USING, ese modo vale solo para esta consulta (nunca se copia al componente)
+    UsingSpecified: Boolean;
+    OptimizeSpecified: Boolean;
 
     // WHERE
     // CAMBIO: Ahora usamos Criteria nativo, no MetaData plano
@@ -518,10 +537,27 @@ end;
 function TVGQLLexer.ReadNumber: TVGQLToken;
 var
   Start: Integer;
+  HasDot: Boolean;
 begin
   Start := FPos;
-  while (not IsEOF) and (Peek.IsDigit or (Peek = '.')) do
-    Next;
+  HasDot := False;
+  while not IsEOF do
+  begin
+    if Peek.IsDigit then
+      Next
+    else if (Peek = '.') and not HasDot and (FPos < Length(FText)) and FText[FPos + 1].IsDigit then
+    begin
+      HasDot := True;
+      Next;
+    end
+    else
+      Break;
+  end;
+
+  // Un numero pegado a otro punto, a letras o a '_' (1.2.3, 12abc) es un error. Antes '1.2.3'
+  // pasaba como numero, el compilador lo volvia 0 y el filtro se aplicaba con ese 0
+  if (not IsEOF) and (Peek.IsLetterOrDigit or (Peek = '_') or (Peek = '.')) then
+    raise EVGQLParserError.CreateFmt(AiStr('rag.vql.bad_number'), [Copy(FText, Start, FPos - Start + 1), Start]);
 
   Result.Kind := tkNumber;
   Result.Text := Copy(FText, Start, FPos - Start);
@@ -742,6 +778,14 @@ begin
   inherited;
 end;
 
+{ TNotExpression }
+
+destructor TNotExpression.Destroy;
+begin
+  FOperand.Free;
+  inherited;
+end;
+
 { TUsingClause }
 
 constructor TUsingClause.Create(APosition: Integer);
@@ -918,6 +962,8 @@ end;
 { ===== PARSER PRINCIPAL ===== }
 
 function TVGQLParser.Parse: TVGQLQuery;
+var
+  N: Integer;
 begin
   Result := TVGQLQuery.Create;
   try
@@ -970,23 +1016,23 @@ begin
     // LIMIT (opcional)
     if Match(tkLimit) then
     begin
-      // Al usar Match(tkLimit), ya saltamos el token "LIMIT"
-      // Ahora FCurrent apunta al supuesto numero
-      if Check(tkNumber) then
+      // Entero mayor que 0. Antes LIMIT 0 se ignoraba (y salian 10) y LIMIT 1.5 reventaba con
+      // un EConvertError
+      if Check(tkNumber) and TryStrToInt(FCurrent.Text, N) and (N > 0) then
       begin
-        Result.Limit := StrToInt(FCurrent.Text);
-        Next; // Ahora si, consumimos el numero para pasar al siguiente token
+        Result.Limit := N;
+        Next;
       end
       else
         raise EVGQLParserError.Create(AiStr('rag.vql.limit_number'));
     end;
 
-    // OFFSET (opcional) — paginacion
+    // OFFSET (opcional) — paginacion; entero, 0 o mas
     if Match(tkOffset) then
     begin
-      if Check(tkNumber) then
+      if Check(tkNumber) and TryStrToInt(FCurrent.Text, N) and (N >= 0) then
       begin
-        Result.Offset := StrToInt(FCurrent.Text);
+        Result.Offset := N;
         Next;
       end
       else
@@ -1179,12 +1225,12 @@ var
   Left, Right: TExpression;
   BinExpr: TBinaryExpression;
 begin
-  Left := ParseComparison;
+  Left := ParseNot;
   Result := Left;
 
   while Match(tkAnd) do
   begin
-    Right := ParseComparison;
+    Right := ParseNot;
     BinExpr := TBinaryExpression.Create;
     BinExpr.Left := Left;
     BinExpr.Operator := boAnd;
@@ -1192,6 +1238,27 @@ begin
     Result := BinExpr;
     Left := Result;
   end;
+end;
+
+// NOT antepuesto (NOT condicion, NOT ( ... )): precedencia entre AND y la comparacion
+function TVGQLParser.ParseNot: TExpression;
+var
+  NotExpr: TNotExpression;
+begin
+  if Check(tkNot) then
+  begin
+    NotExpr := TNotExpression.Create(FCurrent.Position);
+    Next;
+    try
+      NotExpr.Operand := ParseNot;
+    except
+      NotExpr.Free;
+      raise;
+    end;
+    Result := NotExpr;
+  end
+  else
+    Result := ParseComparison;
 end;
 
 function TVGQLParser.ParseComparison: TExpression;
@@ -1202,6 +1269,7 @@ var
   BinExpr: TBinaryExpression;
   Op: TBinaryOperator;
   IsNegated: Boolean;
+  NotPos: Integer;
 begin
   Left := ParsePrimary;
   Result := Left;
@@ -1222,8 +1290,22 @@ begin
     Exit(BinExpr);
   end;
 
-  // 2. Caso: [NOT] IN (val1, val2...)
-  IsNegated := Match(tkNot); // Soporte para NOT IN
+  // 2. NOT pospuesto: NOT IN, NOT LIKE, NOT ILIKE, NOT BETWEEN, NOT CONTAINS, NOT STARTS_WITH,
+  // NOT ENDS_WITH. Antes el NOT solo valia delante de IN: en los demas se consumia y se perdia,
+  // y la consulta devolvia justo lo contrario de lo pedido
+  IsNegated := False;
+  if Check(tkNot) then
+  begin
+    NotPos := FCurrent.Position;
+    Next;
+    if not(FCurrent.Kind in [tkIn, tkBetween, tkLike, tkILike, tkContains, tkStartsWith, tkEndsWith]) then
+    begin
+      Left.Free;
+      raise EVGQLParserError.CreateFmt(AiStr('rag.vql.not_operator'), [NotPos]);
+    end;
+    IsNegated := True;
+  end;
+
   if Match(tkIn) then
   begin
     InExpr := TInExpression.Create(FCurrent.Position);
@@ -1250,6 +1332,7 @@ begin
     BetExpr.Left := Left;
     BetExpr.Min := Min;
     BetExpr.Max := Max;
+    BetExpr.Negated := IsNegated;
     Exit(BetExpr);
   end;
 
@@ -1290,6 +1373,7 @@ begin
     BinExpr.Left := Left;
     BinExpr.Operator := Op;
     BinExpr.Right := Right;
+    BinExpr.Negated := IsNegated;
     Result := BinExpr;
   end;
 end;
@@ -1682,6 +1766,7 @@ begin
     TSearchMode.smHybrid:
     begin
       FRequest.Mode := smHybrid;
+      FRequest.UsingSpecified := True;
 
       // En modo hibrido, nos aseguramos de que los pesos sumen exactamente 1.0
       TotalWeight := AClause.SemanticWeight + AClause.LexicalWeight;
@@ -1702,6 +1787,7 @@ begin
     TSearchMode.smEmbeddings:
     begin
       FRequest.Mode := smEmbeddings;
+      FRequest.UsingSpecified := True;
       // Si solo usamos embeddings, el peso semantico DEBE ser 100%
       FRequest.WeightSemantic := 1.0;
       FRequest.WeightLexical := 0.0;
@@ -1710,6 +1796,7 @@ begin
     TSearchMode.smBM25:
     begin
       FRequest.Mode := TSearchMode.smBM25;
+      FRequest.UsingSpecified := True;
       // Si solo usamos BM25, el peso lexico DEBE ser 100%
       FRequest.WeightSemantic := 0.0;
       FRequest.WeightLexical := 1.0;
@@ -1760,7 +1847,9 @@ begin
     ltString:
       Result := Lit.Value;
     ltNumber:
-      Result := StrToFloatDef(Lit.Value.Replace(',', '.'), 0);
+      // El lexer solo deja pasar digitos con un punto decimal. Antes StrToFloatDef usaba el
+      // separador de Windows: con coma decimal, 42000.5 se volvia 0 y el filtro seguia con ese 0
+      Result := StrToFloat(Lit.Value, TFormatSettings.Invariant);
     ltBoolean:
       Result := SameText(Lit.Value, 'TRUE');
     ltNull:
@@ -1776,11 +1865,19 @@ var
   Bet: TBetweenExpression;
   InExp: TInExpression;
   FieldName: string;
-  VArray: Variant;
+  VArray, V: Variant;
+  FOp: TFilterOperator;
   i: Integer;
 begin
   if not Assigned(AExpr) then
     Exit;
+
+  // 0. NOT ( ... ): subgrupo negado
+  if AExpr is TNotExpression then
+  begin
+    BuildFilter(TNotExpression(AExpr).Operand, ACriteria.AddNotGroup(loAnd));
+    Exit;
+  end;
 
   // 1. GRUPOS LOGICOS (AND / OR)
   if (AExpr is TBinaryExpression) and (TBinaryExpression(AExpr).Operator in [boAnd, boOr]) then
@@ -1811,7 +1908,10 @@ begin
     if not(Bet.Left is TIdentifierExpression) then
       raise EVGQLTranslationError.Create(AiStr('rag.vql.between_field'));
 
-    ACriteria.AddBetween(TIdentifierExpression(Bet.Left).Name, GetLiteralValue(Bet.Min), GetLiteralValue(Bet.Max));
+    if Bet.Negated then
+      ACriteria.AddNot(TIdentifierExpression(Bet.Left).Name, foBetween, GetLiteralValue(Bet.Min), GetLiteralValue(Bet.Max))
+    else
+      ACriteria.AddBetween(TIdentifierExpression(Bet.Left).Name, GetLiteralValue(Bet.Min), GetLiteralValue(Bet.Max));
   end
 
   // 3. COMPARACION EN LISTA (IN)
@@ -1843,33 +1943,50 @@ begin
 
     case Bin.Operator of
       boEqual:
-        ACriteria.AddEqual(FieldName, GetLiteralValue(Bin.Right));
+        FOp := foEqual;
       boNotEqual:
-        ACriteria.Add(FieldName, foNotEqual, GetLiteralValue(Bin.Right));
+        FOp := foNotEqual;
       boGreater:
-        ACriteria.AddGreater(FieldName, GetLiteralValue(Bin.Right));
+        FOp := foGreater;
       boGreaterEqual:
-        ACriteria.Add(FieldName, foGreaterOrEqual, GetLiteralValue(Bin.Right));
+        FOp := foGreaterOrEqual;
       boLess:
-        ACriteria.AddLess(FieldName, GetLiteralValue(Bin.Right));
+        FOp := foLess;
       boLessEqual:
-        ACriteria.Add(FieldName, foLessOrEqual, GetLiteralValue(Bin.Right));
+        FOp := foLessOrEqual;
       boContains:
-        ACriteria.Add(FieldName, foContains, GetLiteralValue(Bin.Right));
+        FOp := foContains;
       boStartsWith:
-        ACriteria.Add(FieldName, foStartsWith, GetLiteralValue(Bin.Right));
+        FOp := foStartsWith;
       boEndsWith:
-        ACriteria.Add(FieldName, foEndsWith, GetLiteralValue(Bin.Right));
+        FOp := foEndsWith;
       boLike:
-        ACriteria.Add(FieldName, foLike, GetLiteralValue(Bin.Right));
+        FOp := foLike;
       boILike:
-        ACriteria.Add(FieldName, foILike, GetLiteralValue(Bin.Right));
+        FOp := foILike;
       boIsNull:
-        ACriteria.Add(FieldName, foIsNull, Null);
+        FOp := foIsNull;
       boIsNotNull:
-        ACriteria.Add(FieldName, foIsNotNull, Null);
+        FOp := foIsNotNull;
+    else
+      raise EVGQLTranslationError.Create(AiStr('rag.vql.condition_expected'));
     end;
-  end;
+
+    if FOp in [foIsNull, foIsNotNull] then
+      V := Null
+    else
+      V := GetLiteralValue(Bin.Right);
+
+    if Bin.Negated then
+      ACriteria.AddNot(FieldName, FOp, V)
+    else
+      ACriteria.Add(FieldName, FOp, V);
+  end
+
+  // 5. Un campo o un valor solo no es una condicion. Antes "WHERE estado" se ignoraba en
+  // silencio y la busqueda salia sin filtro
+  else
+    raise EVGQLTranslationError.Create(AiStr('rag.vql.condition_expected'));
 end;
 
 procedure TVGQLCompiler.TranslateRerank(AClause: TRerankClause);
@@ -1892,6 +2009,7 @@ end;
 
 procedure TVGQLCompiler.TranslateOptimize(AClause: TOptimizeClause);
 begin
+  FRequest.OptimizeSpecified := True;
   case AClause.Mode of
     omReorderABC:
     begin

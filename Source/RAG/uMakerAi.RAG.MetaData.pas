@@ -12,7 +12,6 @@ uses
   System.StrUtils,
   System.DateUtils,
   System.Math,
-  System.Masks, // Necesario para simular LIKE
   System.VarUtils;
 
 type
@@ -67,6 +66,10 @@ type
     // --- SOPORTE PARA �RBOL DE DECISI�N (VGQL) ---
     IsGroup: Boolean;
     SubCriteria: TAiFilterCriteria;
+    // NOT: en una condición (NOT LIKE, NOT BETWEEN...) se cumple cuando la condición no se
+    // cumple y el campo existe (como en SQL, comparar contra un campo que falta no se cumple ni
+    // negado); en un grupo, NOT ( ... ) se cumple cuando el grupo no se cumple
+    Negated: Boolean;
 
     constructor Create(const AKey: string; AOp: TFilterOperator; const AVal: Variant); overload;
     constructor Create(const AKey: string; AOp: TFilterOperator; const AVal, AVal2: Variant); overload;
@@ -101,6 +104,11 @@ type
     function AddIn(const Key: string; const Values: Variant): TAiFilterCriteria; // Values puede ser Array Variant
     function AddLike(const Key, Pattern: string; CaseInsensitive: Boolean = True): TAiFilterCriteria;
 
+    // Condición negada (NOT LIKE, NOT BETWEEN...) y subgrupo negado NOT ( ... ). Ver Negated
+    function AddNot(const Key: string; Op: TFilterOperator; const Value: Variant): TAiFilterCriteria; overload;
+    function AddNot(const Key: string; Op: TFilterOperator; const Value, Value2: Variant): TAiFilterCriteria; overload;
+    function AddNotGroup(ALogic: TLogicalOperator): TAiFilterCriteria;
+
     // Carga de compatibilidad desde MetaData antiguo (Todo foEqual)
     procedure LoadFromMetaData(AMeta: TAiEmbeddingMetaData);
 
@@ -123,10 +131,8 @@ type
     procedure SetData(const Value: TStrings);
 
     // Helpers de comparaci�n internos
-    function CompareNumbers(const A, B: Variant; Op: TFilterOperator): Boolean;
-    function CompareStrings(const A, B: string; Op: TFilterOperator): Boolean;
     function CheckInList(const Val: Variant; const List: Variant; Negate: Boolean): Boolean;
-    function CheckLike(const Val, Pattern: string; CaseInsensitive: Boolean): Boolean;
+    function EvaluateCriterion(const ACriterion: TFilterCriterion; const ANodeText: string): Boolean;
 
   public
     constructor Create;
@@ -156,7 +162,242 @@ type
     property TagObject: TObject read FTagObject write FTagObject;
   end;
 
+// Compara dos valores de filtro (lo usan los filtros y el ORDER BY de VQL). Orden de prueba:
+// booleanos, fechas (si alguno es TDateTime; el otro puede ser texto ISO 8601), números
+// (también textos numéricos con punto decimal, en cualquier idioma de Windows: '10' > '9') y
+// textos (sin distinguir mayúsculas y desempatando con ellas, así '=' sí las distingue).
+// Devuelve False si no se pueden comparar: un NULL, o un número contra un texto no numérico.
+function AiCompareValues(const A, B: Variant; out ACmp: Integer): Boolean;
+
+// LIKE de SQL: '%' cualquier secuencia, '_' un carácter y '\' escapa el siguiente. Antes se
+// simulaba con MatchesMask, que no distingue mayúsculas y toma '*', '?' y '[' como comodines.
+function AiLikeMatch(const AText, APattern: string; ACaseInsensitive: Boolean): Boolean;
+
+// Texto de un valor para CONTAINS/LIKE: números con punto decimal sin importar el idioma
+function AiFilterValueToText(const V: Variant): string;
+
 implementation
+
+type
+  TAiLikeToken = record
+    Kind: Byte; // 0 = carácter literal, 1 = '_' (uno cualquiera), 2 = '%' (cualquier secuencia)
+    Ch: Char;
+  end;
+
+function AiIsIntType(const V: Variant): Boolean;
+begin
+  case VarType(V) and varTypeMask of
+    varSmallint, varInteger, varShortInt, varByte, varWord, varLongWord, varInt64:
+      Result := True;
+  else
+    Result := False;
+  end;
+end;
+
+function AiIsTextType(const V: Variant): Boolean;
+var
+  T: Word;
+begin
+  T := VarType(V) and varTypeMask;
+  Result := (T = varUString) or (T = varString) or (T = varOleStr);
+end;
+
+function AiTryNumber(const V: Variant; out D: Double; out AIsNumberType: Boolean): Boolean;
+var
+  S: string;
+begin
+  D := 0;
+  AIsNumberType := False;
+  case VarType(V) and varTypeMask of
+    varSmallint, varInteger, varShortInt, varByte, varWord, varLongWord, varInt64, varUInt64, varSingle, varDouble, varCurrency:
+      begin
+        AIsNumberType := True;
+        D := V;
+        Exit(True);
+      end;
+  end;
+  if AiIsTextType(V) then
+  begin
+    S := Trim(VarToStr(V));
+    Exit((S <> '') and TryStrToFloat(S, D, TFormatSettings.Invariant));
+  end;
+  Result := False;
+end;
+
+function AiTryDate(const V: Variant; out DT: TDateTime): Boolean;
+begin
+  if (VarType(V) and varTypeMask) = varDate then
+  begin
+    DT := VarToDateTime(V);
+    Exit(True);
+  end;
+  Result := AiIsTextType(V) and TryISO8601ToDate(VarToStr(V), DT);
+end;
+
+function AiTryBool(const V: Variant; out B: Boolean): Boolean;
+begin
+  if (VarType(V) and varTypeMask) = varBoolean then
+  begin
+    B := V;
+    Exit(True);
+  end;
+  Result := AiIsTextType(V) and TryStrToBool(VarToStr(V), B);
+end;
+
+function AiFilterValueToText(const V: Variant): string;
+var
+  D: Double;
+  IsNum: Boolean;
+begin
+  if VarIsNull(V) or VarIsEmpty(V) then
+    Exit('');
+  if (not AiIsTextType(V)) and (not AiIsIntType(V)) and AiTryNumber(V, D, IsNum) and IsNum then
+    Exit(FloatToStr(D, TFormatSettings.Invariant));
+  Result := VarToStr(V);
+end;
+
+function AiCompareValues(const A, B: Variant; out ACmp: Integer): Boolean;
+var
+  DA, DB: Double;
+  NumA, NumB, IsNumA, IsNumB: Boolean;
+  TA, TB: TDateTime;
+  BA, BB: Boolean;
+  I1, I2: Int64;
+  SA, SB: string;
+begin
+  ACmp := 0;
+  if VarIsNull(A) or VarIsEmpty(A) or VarIsNull(B) or VarIsEmpty(B) or VarIsArray(A) or VarIsArray(B) then
+    Exit(False);
+
+  // Booleanos
+  if ((VarType(A) and varTypeMask) = varBoolean) or ((VarType(B) and varTypeMask) = varBoolean) then
+  begin
+    if not(AiTryBool(A, BA) and AiTryBool(B, BB)) then
+      Exit(False);
+    ACmp := Ord(BA) - Ord(BB);
+    Exit(True);
+  end;
+
+  // Fechas
+  if ((VarType(A) and varTypeMask) = varDate) or ((VarType(B) and varTypeMask) = varDate) then
+  begin
+    if not(AiTryDate(A, TA) and AiTryDate(B, TB)) then
+      Exit(False);
+    ACmp := CompareDateTime(TA, TB);
+    Exit(True);
+  end;
+
+  // Números (los enteros, sin pasar por Double, para no perder precisión en IDs grandes)
+  NumA := AiTryNumber(A, DA, IsNumA);
+  NumB := AiTryNumber(B, DB, IsNumB);
+  if NumA and NumB then
+  begin
+    if AiIsIntType(A) and AiIsIntType(B) then
+    begin
+      I1 := A;
+      I2 := B;
+      ACmp := CompareValue(I1, I2);
+    end
+    else if SameValue(DA, DB) then
+      ACmp := 0
+    else
+      ACmp := CompareValue(DA, DB);
+    Exit(True);
+  end;
+  // Un número contra un texto que no es número: no se comparan (en SQL el cast falla)
+  if IsNumA or IsNumB then
+    Exit(False);
+
+  // Textos
+  SA := VarToStr(A);
+  SB := VarToStr(B);
+  ACmp := CompareText(SA, SB);
+  if ACmp = 0 then
+    ACmp := CompareStr(SA, SB);
+  ACmp := Sign(ACmp);
+  Result := True;
+end;
+
+function AiLikeMatch(const AText, APattern: string; ACaseInsensitive: Boolean): Boolean;
+var
+  T, P: string;
+  Toks: TArray<TAiLikeToken>;
+  Tok: TAiLikeToken;
+  Prev, Cur, Tmp: TArray<Boolean>;
+  I, J, N, M: Integer;
+begin
+  if ACaseInsensitive then
+  begin
+    T := AText.ToLower;
+    P := APattern.ToLower;
+  end
+  else
+  begin
+    T := AText;
+    P := APattern;
+  end;
+
+  // Patrón -> fichas
+  Toks := [];
+  I := 1;
+  while I <= Length(P) do
+  begin
+    if (P[I] = '\') and (I < Length(P)) then
+    begin
+      Inc(I);
+      Tok.Kind := 0;
+      Tok.Ch := P[I];
+    end
+    else if P[I] = '%' then
+    begin
+      Tok.Kind := 2;
+      Tok.Ch := #0;
+      if (Length(Toks) > 0) and (Toks[High(Toks)].Kind = 2) then
+      begin
+        Inc(I);
+        Continue; // '%%' es lo mismo que '%'
+      end;
+    end
+    else if P[I] = '_' then
+    begin
+      Tok.Kind := 1;
+      Tok.Ch := #0;
+    end
+    else
+    begin
+      Tok.Kind := 0;
+      Tok.Ch := P[I];
+    end;
+    Toks := Toks + [Tok];
+    Inc(I);
+  end;
+
+  // Programación dinámica: Prev[j] = las primeras j fichas cubren el texto leído hasta ahora
+  N := Length(T);
+  M := Length(Toks);
+  SetLength(Prev, M + 1);
+  SetLength(Cur, M + 1);
+  Prev[0] := True;
+  for J := 1 to M do
+    Prev[J] := Prev[J - 1] and (Toks[J - 1].Kind = 2);
+  for I := 1 to N do
+  begin
+    Cur[0] := False;
+    for J := 1 to M do
+      case Toks[J - 1].Kind of
+        2:
+          Cur[J] := Cur[J - 1] or Prev[J];
+        1:
+          Cur[J] := Prev[J - 1];
+      else
+        Cur[J] := Prev[J - 1] and (Toks[J - 1].Ch = T[I]);
+      end;
+    Tmp := Prev;
+    Prev := Cur;
+    Cur := Tmp;
+  end;
+  Result := Prev[M];
+end;
 
 { TFilterCriterion }
 
@@ -168,6 +409,7 @@ begin
   Value2 := Unassigned;
   IsGroup := False;
   SubCriteria := nil;
+  Negated := False;
 end;
 
 constructor TFilterCriterion.Create(const AKey: string; AOp: TFilterOperator; const AVal, AVal2: Variant);
@@ -178,12 +420,14 @@ begin
   Value2 := AVal2;
   IsGroup := False;
   SubCriteria := nil;
+  Negated := False;
 end;
 
 constructor TFilterCriterion.CreateGroup(ASub: TAiFilterCriteria);
 begin
   IsGroup := True;
   SubCriteria := ASub;
+  Negated := False;
   Key := '';
   Op := foEqual; // No relevante para grupos
   Value := Unassigned;
@@ -288,6 +532,33 @@ begin
     Result := Add(Key, foLike, Pattern);
 end;
 
+function TAiFilterCriteria.AddNot(const Key: string; Op: TFilterOperator; const Value: Variant): TAiFilterCriteria;
+begin
+  Result := AddNot(Key, Op, Value, Unassigned);
+end;
+
+function TAiFilterCriteria.AddNot(const Key: string; Op: TFilterOperator; const Value, Value2: Variant): TAiFilterCriteria;
+var
+  C: TFilterCriterion;
+begin
+  C := TFilterCriterion.Create(Key, Op, Value, Value2);
+  C.Negated := True;
+  FCriteria.Add(C);
+  Result := Self;
+end;
+
+function TAiFilterCriteria.AddNotGroup(ALogic: TLogicalOperator): TAiFilterCriteria;
+var
+  Sub: TAiFilterCriteria;
+  C: TFilterCriterion;
+begin
+  Sub := TAiFilterCriteria.Create(ALogic);
+  C := TFilterCriterion.CreateGroup(Sub);
+  C.Negated := True;
+  FCriteria.Add(C);
+  Result := Sub;
+end;
+
 procedure TAiFilterCriteria.LoadFromMetaData(AMeta: TAiEmbeddingMetaData);
 var
   Pair: TPair<string, Variant>;
@@ -377,133 +648,21 @@ end;
 
 { --- Helpers de Comparaci�n --- }
 
-function TAiEmbeddingMetaData.CompareNumbers(const A, B: Variant; Op: TFilterOperator): Boolean;
-var
-  D1, D2: Double;
-  I1, I2: Int64;
-  TypeA, TypeB: Word;
-  IsIntA, IsIntB: Boolean;
-begin
-  TypeA := VarType(A) and varTypeMask;
-  TypeB := VarType(B) and varTypeMask;
-
-  // Comprobamos si son tipos enteros nativos (Byte, Integer, Int64, etc.)
-  // Esto es crucial para IDs grandes que Double perder�a precisi�n.
-  IsIntA := (TypeA = varInt64) or (TypeA = varInteger) or (TypeA = varSmallint) or (TypeA = varByte) or (TypeA = varShortInt) or (TypeA = varWord) or (TypeA = varLongWord);
-  IsIntB := (TypeB = varInt64) or (TypeB = varInteger) or (TypeB = varSmallint) or (TypeB = varByte) or (TypeB = varShortInt) or (TypeB = varWord) or (TypeB = varLongWord);
-
-  // 1. Camino R�pido y Preciso: Comparaci�n de Enteros de 64 bits
-  if IsIntA and IsIntB then
-  begin
-    try
-      I1 := A;
-      I2 := B;
-      case Op of
-        foEqual:          Result := I1 = I2;
-        foNotEqual:       Result := I1 <> I2;
-        foGreater:        Result := I1 > I2;
-        foGreaterOrEqual: Result := I1 >= I2;
-        foLess:           Result := I1 < I2;
-        foLessOrEqual:    Result := I1 <= I2;
-      else
-        Result := False;
-      end;
-      Exit;
-    except
-      // Si falla la conversi�n directa (raro si VarType dice que es int), caemos al Double
-    end;
-  end;
-
-  // 2. Camino Est�ndar: Comparaci�n de Punto Flotante
-  try
-    D1 := Double(A);
-    D2 := Double(B);
-  except
-    // Si no se puede convertir a n�mero, retornamos falso
-    Exit(False);
-  end;
-
-  case Op of
-    foEqual:
-      Result := SameValue(D1, D2, 0.00001);
-    foNotEqual:
-      Result := not SameValue(D1, D2, 0.00001);
-    foGreater:
-      Result := D1 > D2;
-    foGreaterOrEqual:
-      Result := D1 >= D2;
-    foLess:
-      Result := D1 < D2;
-    foLessOrEqual:
-      Result := D1 <= D2;
-  else
-    Result := False;
-  end;
-end;
-
-function TAiEmbeddingMetaData.CompareStrings(const A, B: string; Op: TFilterOperator): Boolean;
-begin
-  case Op of
-    foEqual:
-      Result := SameText(A, B);
-    foNotEqual:
-      Result := not SameText(A, B);
-    foContains:
-      Result := ContainsText(A, B);
-    foStartsWith:
-      Result := StartsText(B, A);
-    foEndsWith:
-      Result := EndsText(B, A);
-    foGreater:
-      Result := CompareText(A, B) > 0;
-    foLess:
-      Result := CompareText(A, B) < 0;
-  else
-    Result := False;
-  end;
-end;
-
-function TAiEmbeddingMetaData.CheckLike(const Val, Pattern: string; CaseInsensitive: Boolean): Boolean;
-var
-  LVal, LPat: string;
-begin
-  LPat := Pattern.Replace('%', '*').Replace('_', '?');
-  LVal := Val;
-
-  if CaseInsensitive then
-  begin
-    LPat := LPat.ToLower;
-    LVal := LVal.ToLower;
-  end;
-
-  Result := MatchesMask(LVal, LPat);
-end;
-
 function TAiEmbeddingMetaData.CheckInList(const Val: Variant; const List: Variant; Negate: Boolean): Boolean;
 var
-  i: Integer;
-  Item: Variant;
-  ValStr: string;
+  i, Cmp: Integer;
 begin
+  // Mismo criterio que '=' (números, fechas y textos distinguiendo mayúsculas)
   Result := False;
   if not VarIsArray(List) then
-  begin
-    Result := (Val = List);
-    if Negate then
-      Result := not Result;
-    Exit;
-  end;
-
-  ValStr := VarToStrDef(Val, '');
-  for i := VarArrayLowBound(List, 1) to VarArrayHighBound(List, 1) do
-  begin
-    Item := VarArrayGet(List, [i]);
-    if SameText(ValStr, VarToStrDef(Item, '')) then
-    begin
-      Result := True;
-      Break;
-    end;
-  end;
+    Result := AiCompareValues(Val, List, Cmp) and (Cmp = 0)
+  else
+    for i := VarArrayLowBound(List, 1) to VarArrayHighBound(List, 1) do
+      if AiCompareValues(Val, VarArrayGet(List, [i]), Cmp) and (Cmp = 0) then
+      begin
+        Result := True;
+        Break;
+      end;
 
   if Negate then
     Result := not Result;
@@ -516,17 +675,11 @@ begin
   Result := Evaluate(Name, Op, Value, Unassigned);
 end;
 
-{ --- Implementaci�n de Evaluate --- }
-
-{ --- Implementaci�n de Evaluate --- }
-
 function TAiEmbeddingMetaData.Evaluate(const Name: string; Op: TFilterOperator; const Value, Value2: Variant; const ANodeText: string = ''): Boolean;
 var
   PropValue: Variant;
   Exists: Boolean;
-  DTProp, DTVal1, DTVal2: TDateTime;
-  IsDateComparison: Boolean;
-  i: Integer;
+  i, Cmp, Cmp2: Integer;
 begin
   // 1. Inyecci�n de campo virtual 'text' (Contenido del nodo)
   if SameText(Name, 'text') then
@@ -561,12 +714,10 @@ begin
     // Solo soportamos si la propiedad es un Array (ej: Tags: ["A", "B"])
     if VarIsArray(PropValue) then
     begin
-      // Si el valor buscado es un array (�Alguna de estas etiquetas existe?)
       if VarIsArray(Value) then
       begin
         if Op = foExistsAny then
         begin
-          // ?| : �Alg�n elemento de Value est� en PropValue?
           for i := VarArrayLowBound(Value, 1) to VarArrayHighBound(Value, 1) do
             if CheckInList(VarArrayGet(Value, [i]), PropValue, False) then
               Exit(True);
@@ -574,7 +725,6 @@ begin
         end
         else // foExistsAll
         begin
-          // ?& : �Todos los elementos de Value est�n en PropValue?
           for i := VarArrayLowBound(Value, 1) to VarArrayHighBound(Value, 1) do
             if not CheckInList(VarArrayGet(Value, [i]), PropValue, False) then
               Exit(False);
@@ -582,78 +732,63 @@ begin
         end;
       end
       else
-      begin
-        // Si Value es simple, se comporta como un CONTAINS en lista
-        Exit(CheckInList(Value, PropValue, False));
-      end;
+        Exit(CheckInList(Value, PropValue, False)); // Valor simple: CONTAINS en la lista
     end;
-    // Si la propiedad no es array, fallamos (o podr�as tratarlo como string contains)
     Exit(False);
   end;
 
-  // 5. Operadores de patr�n de texto (LIKE / ILIKE)
+  // 5. Patrones: LIKE distingue mayúsculas, ILIKE no (como en SQL)
   if Op in [foLike, foILike] then
-    Exit(CheckLike(VarToStr(PropValue), VarToStr(Value), Op = foILike));
+    Exit(AiLikeMatch(AiFilterValueToText(PropValue), AiFilterValueToText(Value), Op = foILike));
 
-  // 6. DETECCI�N DE COMPARACI�N DE FECHAS
-  // Comprobamos si la propiedad es una fecha o un string con formato ISO8601
-  IsDateComparison := (VarType(PropValue) = varDate) or
-                      ((VarType(PropValue) = varString) and TryISO8601ToDate(VarToStr(PropValue), DTProp));
-
-  if IsDateComparison then
-  begin
-    // Asegurar que DTProp tenga el valor correcto
-    if VarType(PropValue) = varDate then
-      DTProp := VarToDateTime(PropValue); // Ya lo tenemos, pero por seguridad en el flujo
-
-    if Op = foBetween then
-    begin
-      // Para BETWEEN, ambos l�mites deben ser fechas v�lidas
-      if TryISO8601ToDate(VarToStr(Value), DTVal1) and TryISO8601ToDate(VarToStr(Value2), DTVal2) then
-        Exit((DTProp >= DTVal1) and (DTProp <= DTVal2))
-      else
-        Exit(False);
-    end
-    else if TryISO8601ToDate(VarToStr(Value), DTVal1) then
-    begin
-      // Comparaciones est�ndar de fechas
-      case Op of
-        foEqual:          Exit(DTProp = DTVal1);
-        foNotEqual:       Exit(DTProp <> DTVal1);
-        foGreater:        Exit(DTProp > DTVal1);
-        foGreaterOrEqual: Exit(DTProp >= DTVal1);
-        foLess:           Exit(DTProp < DTVal1);
-        foLessOrEqual:    Exit(DTProp <= DTVal1);
-      end;
-    end;
+  // 6. Texto parcial, sin distinguir mayúsculas
+  case Op of
+    foContains:
+      Exit(ContainsText(AiFilterValueToText(PropValue), AiFilterValueToText(Value)));
+    foStartsWith:
+      Exit(StartsText(AiFilterValueToText(Value), AiFilterValueToText(PropValue)));
+    foEndsWith:
+      Exit(EndsText(AiFilterValueToText(Value), AiFilterValueToText(PropValue)));
   end;
 
-  // 7. DETECCI�N DE COMPARACI�N NUM�RICA
-  // Usamos VarIsNumeric para evitar excepciones. CompareNumbers maneja la precisi�n.
-  if VarIsNumeric(PropValue) and VarIsNumeric(Value) then
-  begin
-    if Op = foBetween then
-    begin
-      if VarIsNumeric(Value2) then
-        Exit((Double(PropValue) >= Double(Value)) and (Double(PropValue) <= Double(Value2)))
-      else
-        Exit(False);
-    end;
-
-    // Llamada al helper optimizado
-    Exit(CompareNumbers(PropValue, Value, Op));
-  end;
-
-  // 8. COMPARACI�N POR DEFECTO (STRINGS / TEXTO)
-  // Fallback final para strings
+  // 7. Rango
   if Op = foBetween then
-  begin
-    Exit((VarToStr(PropValue) >= VarToStr(Value)) and
-         (VarToStr(PropValue) <= VarToStr(Value2)));
-  end;
+    Exit(AiCompareValues(PropValue, Value, Cmp) and AiCompareValues(PropValue, Value2, Cmp2) and (Cmp >= 0) and (Cmp2 <= 0));
 
-  // Delegamos en CompareStrings (que maneja Contains, StartsWith, EndsWith, etc.)
-  Result := CompareStrings(VarToStr(PropValue), VarToStr(Value), Op);
+  // 8. Comparaciones: números (también en texto), fechas, booleanos y textos. Antes '>=' y '<='
+  // sobre texto nunca se cumplían y '10' > 9 comparaba como texto
+  if not AiCompareValues(PropValue, Value, Cmp) then
+    Exit(False);
+  case Op of
+    foEqual:
+      Result := Cmp = 0;
+    foNotEqual:
+      Result := Cmp <> 0;
+    foGreater:
+      Result := Cmp > 0;
+    foGreaterOrEqual:
+      Result := Cmp >= 0;
+    foLess:
+      Result := Cmp < 0;
+    foLessOrEqual:
+      Result := Cmp <= 0;
+  else
+    Result := False;
+  end;
+end;
+
+function TAiEmbeddingMetaData.EvaluateCriterion(const ACriterion: TFilterCriterion; const ANodeText: string): Boolean;
+var
+  V: Variant;
+begin
+  Result := Evaluate(ACriterion.Key, ACriterion.Op, ACriterion.Value, ACriterion.Value2, ANodeText);
+  if not ACriterion.Negated then
+    Exit;
+  // Como en SQL: comparar contra un campo que falta (o NULL) no se cumple, tampoco negado
+  if not(ACriterion.Op in [foIsNull, foIsNotNull, foExists]) and not SameText(ACriterion.Key, 'text') then
+    if not FProperties.TryGetValue(ACriterion.Key, V) or VarIsNull(V) then
+      Exit(False);
+  Result := not Result;
 end;
 
 { --- Nuevo Matches Recursivo (Composite Pattern) --- }
@@ -674,9 +809,9 @@ begin
     begin
       // Si es grupo, recursividad
       if Criterion.IsGroup then
-        CurrentMatch := Matches(Criterion.SubCriteria, ANodeText)
+        CurrentMatch := Matches(Criterion.SubCriteria, ANodeText) xor Criterion.Negated
       else
-        CurrentMatch := Evaluate(Criterion.Key, Criterion.Op, Criterion.Value, Criterion.Value2, ANodeText);
+        CurrentMatch := EvaluateCriterion(Criterion, ANodeText);
 
       if not CurrentMatch then
       begin
@@ -692,9 +827,9 @@ begin
     for Criterion in Criteria.List do
     begin
       if Criterion.IsGroup then
-        CurrentMatch := Matches(Criterion.SubCriteria, ANodeText)
+        CurrentMatch := Matches(Criterion.SubCriteria, ANodeText) xor Criterion.Negated
       else
-        CurrentMatch := Evaluate(Criterion.Key, Criterion.Op, Criterion.Value, Criterion.Value2, ANodeText);
+        CurrentMatch := EvaluateCriterion(Criterion, ANodeText);
 
       if CurrentMatch then
       begin

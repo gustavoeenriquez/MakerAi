@@ -223,7 +223,17 @@ begin
       if Criterion.IsGroup then
       begin
         SubSQL := Process(Criterion.SubCriteria);
-        if SubSQL <> '' then Parts.Add('(' + SubSQL + ')');
+        // Grupo negado NOT ( ... ): CASE lo vuelve verdadero/falso (un NULL adentro cuenta como falso,
+        // igual que en memoria) y despues se niega
+        if Criterion.Negated then
+        begin
+          if SubSQL = '' then
+            Parts.Add('(1=0)')
+          else
+            Parts.Add('(CASE WHEN (' + SubSQL + ') THEN 1 ELSE 0 END = 0)');
+        end
+        else if SubSQL <> '' then
+          Parts.Add('(' + SubSQL + ')');
         Continue;
       end;
 
@@ -293,6 +303,10 @@ begin
       else
         Parts.Add('(1=1)');
       end;
+
+      // NOT LIKE, NOT BETWEEN...: NOT ( ... ); un campo que falta da NULL y no se cumple
+      if Criterion.Negated and (Parts.Count > 0) then
+        Parts[Parts.Count - 1] := 'NOT ' + Parts[Parts.Count - 1];
     end;
 
     if Parts.Count > 0 then

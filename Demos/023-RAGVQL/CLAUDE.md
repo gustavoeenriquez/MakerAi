@@ -79,8 +79,9 @@ RETURN TEXT, METADATA, SCORE
 LIMIT 10
 ```
 
-**WHERE operators:** `=`, `<>`, `>`, `>=`, `<`, `<=`, `CONTAINS`, `STARTS_WITH`, `ENDS_WITH`, `LIKE`, `ILIKE`, `IN`, `NOT IN`, `BETWEEN`, `IS NULL`, `IS NOT NULL`, `EXISTS`
-**Logical:** `AND`, `OR` (with implicit grouping via parentheses)
+**WHERE operators:** `=`, `<>`, `>`, `>=`, `<`, `<=`, `CONTAINS`, `STARTS_WITH`, `ENDS_WITH`, `LIKE`, `ILIKE`, `IN`, `BETWEEN`, `IS NULL`, `IS NOT NULL`, and `NOT` after the field for `IN`, `LIKE`, `ILIKE`, `BETWEEN`, `CONTAINS`, `STARTS_WITH`, `ENDS_WITH` (`estado NOT LIKE 'borr%'`; a missing field does not match, as in SQL)
+**Logical:** `AND`, `OR`, `NOT (...)` / `NOT condicion` (negates the whole group), parentheses
+**Semantics (nov 24/2026):** `=`, `IN` and `LIKE` are case-sensitive; `ILIKE`, `CONTAINS`, `STARTS_WITH` and `ENDS_WITH` are not. `LIKE` wildcards are only `%` and `_`. Numbers stored as text compare as numbers. Without `USING` the query uses `rag.SearchOptions`; VQL never changes `rag.SearchOptions`. The debug view (`BtnVGqlToText`) shows `NOT` on negated conditions and groups.
 
 Errors raise `EVGQLParserError` (lexer/parse) or `EVGQLTranslationError` (compile).
 

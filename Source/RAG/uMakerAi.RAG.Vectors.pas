@@ -209,7 +209,9 @@ type
     function FilterByCriteria(const aCriteria: TAiFilterCriteria): TAiRAGVector;
 
     procedure Notification(AComponent: TComponent; Operation: TOperation); override;
-    function WeightedScoreFusion(VectorResults: TList<TAiSearchResult>; LexicalResults: TList<TPair<Double, TAiEmbeddingNode>>; aLimit: Integer): TAiRAGVector;
+    function WeightedScoreFusion(VectorResults: TList<TAiSearchResult>; LexicalResults: TList<TPair<Double, TAiEmbeddingNode>>; aLimit: Integer): TAiRAGVector; overload;
+    function WeightedScoreFusion(VectorResults: TList<TAiSearchResult>; LexicalResults: TList<TPair<Double, TAiEmbeddingNode>>; aLimit: Integer;
+      AOptions: TAiSearchOptions): TAiRAGVector; overload;
     procedure ApplyContextReordering(Vector: TAiRAGVector);
     procedure InternalNormalizeVector(aList: TList<TAiSearchResult>);
     procedure InternalNormalizeLexical(aList: TList < TPair < Double, TAiEmbeddingNode >> );
@@ -229,6 +231,12 @@ type
 
     Function Search(Target: TAiEmbeddingNode; aLimit: Integer; aPrecision: Double; aFilter: TAiFilterCriteria): TAiRAGVector; Overload; // Definitivo
     Function Search(Prompt: String; aLimit: Integer; aPrecision: Double; aFilter: TAiFilterCriteria): TAiRAGVector; Overload; // Definitivo
+    // Igual que Search, con opciones y entidad propias de esta busqueda: no toca SearchOptions
+    // ni Entidad del componente (lo usa VQL; sirve para busquedas concurrentes con modos distintos)
+    function SearchWith(Target: TAiEmbeddingNode; aLimit: Integer; aPrecision: Double; aFilter: TAiFilterCriteria;
+      AOptions: TAiSearchOptions; const AEntidad: string): TAiRAGVector; overload;
+    function SearchWith(const Prompt: string; aLimit: Integer; aPrecision: Double; aFilter: TAiFilterCriteria;
+      AOptions: TAiSearchOptions; const AEntidad: string): TAiRAGVector; overload;
 
     Function SearchText(aPrompt: String; aLimit: Integer = 10; aPrecision: Double = 0.5; aFilter: TAiFilterCriteria = nil; IncludeMetadata: Boolean = True; IncludeScore: Boolean = True): String; Overload; Virtual;
     Function SearchText(aPrompt: TAiEmbeddingNode; aLimit: Integer = 10; aPresicion: Double = 0.5; aFilter: TAiFilterCriteria = nil; IncludeMetadata: Boolean = True; IncludeScore: Boolean = True): String; Overload; Virtual;
@@ -1121,9 +1129,9 @@ var
   TempOptions: TAiSearchOptions;
   i: Integer;
   MMRVector: TAiRAGVector;
-  SavedEntidad: string;
+  QueryEntidad: string;
   SearchLimit: Integer;
-  NeedsRegen: Boolean;
+  NeedsRegen, DoReorderABC: Boolean;
 begin
   Result := '';
   AResultVector := nil;
@@ -1140,40 +1148,50 @@ begin
     Exit;
   end;
 
-  // La entidad compilada (clausula MATCH) manda mientras dure esta consulta.
-  // Sin esto MATCH se parseaba, se compilaba y se perdia justo aqui.
-  SavedEntidad := FEntidad;
-  try
-    if Req.Entity <> '' then
-      FEntidad := Req.Entity;
-
+  // La entidad compilada (clausula MATCH) manda solo en esta consulta: se le pasa a la busqueda,
+  // no se escribe en el componente (antes se cambiaba FEntidad mientras duraba la consulta, y otra
+  // busqueda concurrente en otro hilo usaba la entidad equivocada)
+  if Req.Entity <> '' then
+    QueryEntidad := Req.Entity
+  else
+    QueryEntidad := FEntidad;
+  begin
     // -------------------------------------------------------------------------
-    // 3. BACK-END: CONFIGURACION DINAMICA DEL MOTOR
+    // 3. BACK-END: OPCIONES DE ESTA CONSULTA
     // -------------------------------------------------------------------------
+    // Parten de las SearchOptions del componente y solo cambia lo que el VQL escribe. Antes se
+    // copiaban AL componente (Self.SearchOptions.Assign) y quedaban fijas para todas las
+    // busquedas siguientes; y un VQL sin USING imponia hibrido 70/30 aunque no hubiera indice
+    // BM25, lo que bajaba todos los puntajes (una coincidencia perfecta daba 0.7)
     TempOptions := TAiSearchOptions.Create;
     try
-      TempOptions.UseEmbeddings := (Req.Mode = TSearchMode.smEmbeddings) or (Req.Mode = TSearchMode.smHybrid);
-      TempOptions.UseBM25       := (Req.Mode = TSearchMode.smBM25) or (Req.Mode = TSearchMode.smHybrid);
-      TempOptions.EmbeddingWeight := Req.WeightSemantic;
-      TempOptions.BM25Weight      := Req.WeightLexical;
-      TempOptions.UseRRF          := (Req.Fusion = TFusionMode.fmRRF);
-      TempOptions.MinAbsoluteScoreEmbedding := Req.MinSemantic;
-      TempOptions.MinAbsoluteScoreBM25      := Req.MinLexical;
-      // ABC solo si no se usa MMR (son estrategias alternativas de post-procesado)
-      TempOptions.UseReorderABC := Req.UseReorderABC and not Req.UseMMR;
-      Self.SearchOptions.Assign(TempOptions);
-
-      // Sincronizacion de idioma para BM25 -- ahora funcional via LANGUAGE clause.
-      // Solo si el VQL la trae: el valor por defecto del request ('spanish') no
-      // debe pisar el idioma que el consumidor ya configuro en el componente.
-      // OJO: esto afecta al indice BM25 en memoria; un driver SQL tiene su
-      // propio idioma de to_tsvector y hay que fijarlo en el driver.
-      if Req.LanguageSpecified and not Req.Language.IsEmpty then
+      TempOptions.Assign(FSearchOptions);
+      if Req.UsingSpecified then
       begin
-        if SameText(Req.Language, 'spanish')    then Self.LexicalLanguage := alSpanish
-        else if SameText(Req.Language, 'english')    then Self.LexicalLanguage := alEnglish
-        else if SameText(Req.Language, 'portuguese') then Self.LexicalLanguage := alPortuguese;
+        TempOptions.UseEmbeddings := (Req.Mode = TSearchMode.smEmbeddings) or (Req.Mode = TSearchMode.smHybrid);
+        TempOptions.UseBM25 := (Req.Mode = TSearchMode.smBM25) or (Req.Mode = TSearchMode.smHybrid);
+        TempOptions.EmbeddingWeight := Req.WeightSemantic;
+        TempOptions.BM25Weight := Req.WeightLexical;
       end;
+      if Req.FusionSpecified then
+        TempOptions.UseRRF := (Req.Fusion = TFusionMode.fmRRF);
+      if Req.MinSemantic > 0 then
+        TempOptions.MinAbsoluteScoreEmbedding := Req.MinSemantic;
+      if Req.MinLexical > 0 then
+        TempOptions.MinAbsoluteScoreBM25 := Req.MinLexical;
+
+      // REORDER ABC va al final, sobre el resultado ya recortado: dentro de la busqueda se
+      // hacia antes del RERANK, DISTINCT, OFFSET y LIMIT, que despues cortaban justo los
+      // extremos que ABC habia puesto ahi
+      if Req.OptimizeSpecified then
+        DoReorderABC := Req.UseReorderABC and not Req.UseMMR
+      else
+        DoReorderABC := FSearchOptions.UseReorderABC;
+      TempOptions.UseReorderABC := False;
+
+      // LANGUAGE no cambia nada en memoria: el idioma del indice BM25 se fija al indexar
+      // (LexicalLanguage). Antes se escribia en el componente y quedaba fijo, y las busquedas
+      // siguientes tokenizaban la consulta con un idioma distinto al del indice
 
       // -----------------------------------------------------------------------
       // 4. EJECUCION DE LA BUSQUEDA VECTORIAL PRINCIPAL
@@ -1191,7 +1209,7 @@ begin
       if (Req.Offset > 0) and (Req.Limit > 0) then
         SearchLimit := Max(SearchLimit, Req.Limit + Req.Offset);
 
-      AResultVector := Self.Search(Req.Query, SearchLimit, Req.MinGlobal, Req.Filter);
+      AResultVector := Self.SearchWith(Req.Query, SearchLimit, Req.MinGlobal, Req.Filter, TempOptions, QueryEntidad);
 
       // -----------------------------------------------------------------------
       // 5. RERANK (segunda etapa: refinamiento semantico profundo)
@@ -1269,11 +1287,7 @@ begin
         AResultVector.Free;
         AResultVector := MMRVector;
       end
-      // -----------------------------------------------------------------------
-      // 6b. OPTIMIZE REORDER ABC -- optimizacion ventana de contexto LLM
-      // -----------------------------------------------------------------------
-      else if Assigned(AResultVector) and Req.UseReorderABC then
-        ApplyContextReordering(AResultVector);
+      ;
 
       // -----------------------------------------------------------------------
       // 7. DISTINCT ON campo -- deduplicacion por campo de metadato
@@ -1302,6 +1316,12 @@ begin
           DropNode(AResultVector, AResultVector.Count - 1);
 
       // -----------------------------------------------------------------------
+      // 9c. OPTIMIZE REORDER ABC -- optimizacion ventana de contexto LLM, sobre lo que se entrega
+      // -----------------------------------------------------------------------
+      if Assigned(AResultVector) and DoReorderABC and (AResultVector.Count > 2) then
+        ApplyContextReordering(AResultVector);
+
+      // -----------------------------------------------------------------------
       // 10. GENERACION DEL OUTPUT FINAL PARA EL LLM
       // -----------------------------------------------------------------------
       if Assigned(AResultVector) then
@@ -1315,8 +1335,6 @@ begin
     finally
       TempOptions.Free;
     end;
-  finally
-    FEntidad := SavedEntidad;
   end;
 end;
 
@@ -1489,91 +1507,80 @@ begin
   end;
 end;
 
+// Valor de un campo de ORDER BY (fuera de ApplyOrderBy: un metodo anonimo no captura rutinas anidadas)
+function VqlOrderFieldValue(ANode: TAiEmbeddingNode; const AField: string): Variant;
+begin
+  if SameText(AField, 'score') then
+    Result := ANode.Idx
+  else if SameText(AField, 'rank') or SameText(AField, 'orden') then
+    Result := ANode.Orden
+  else if SameText(AField, 'model') then
+    Result := ANode.Model
+  else if SameText(AField, 'id') or SameText(AField, 'tag') then
+    Result := ANode.Tag
+  else if Assigned(ANode.MetaData) and ANode.MetaData.Has(AField) then
+    Result := ANode.MetaData.Get(AField, Null)
+  else
+    Result := Null;
+end;
+
 procedure TAiRAGVector.ApplyOrderBy(AVector: TAiRAGVector; AFields: TList<TOrderByField>);
-// Sorts AVector.Items according to the list of ORDER BY fields.
-// Supports: 'score' (Idx), 'rank'/'orden' (Orden), 'model' (Model), 'id'/'tag' (Tag),
-// and any metadata property name.
+// Ordena por los campos de ORDER BY: 'score' (Idx), 'rank'/'orden' (Orden), 'model', 'id'/'tag'
+// o cualquier metadato. Compara como los filtros (AiCompareValues: '10' va despues de '9'); un
+// valor que falta (o que no se puede comparar) va al final en ASC y en DESC; los empates
+// conservan el orden que traian (por relevancia), porque el Sort de TList no es estable.
 var
   LocalFields: TList<TOrderByField>;
   F: TOrderByField;
+  Position: TDictionary<TAiEmbeddingNode, Integer>;
+  i: Integer;
+
+
 begin
   if (AVector = nil) or (AVector.Count <= 1) or (AFields.Count = 0) then
     Exit;
 
-  // Copy fields into a local list so the anonymous method can safely capture it
   LocalFields := TList<TOrderByField>.Create;
+  Position := TDictionary<TAiEmbeddingNode, Integer>.Create;
   try
     for F in AFields do
       LocalFields.Add(F);
+    for i := 0 to AVector.Count - 1 do
+      Position.AddOrSetValue(AVector.Items[i], i);
 
     AVector.Items.Sort(TComparer<TAiEmbeddingNode>.Construct(
       function(const Left, Right: TAiEmbeddingNode): Integer
       var
-        k: Integer;
-        LF: TOrderByField;
+        k, Cmp: Integer;
         LV, RV: Variant;
-        Cmp: Integer;
+        LMissing, RMissing: Boolean;
       begin
-        Result := 0;
         for k := 0 to LocalFields.Count - 1 do
         begin
-          LF := LocalFields[k];
-
-          // Resolve field value for Left and Right
-          if SameText(LF.FieldName, 'score') then
+          LV := VqlOrderFieldValue(Left, LocalFields[k].FieldName);
+          RV := VqlOrderFieldValue(Right, LocalFields[k].FieldName);
+          LMissing := VarIsNull(LV) or VarIsEmpty(LV);
+          RMissing := VarIsNull(RV) or VarIsEmpty(RV);
+          if LMissing or RMissing then
           begin
-            LV := Left.Idx;
-            RV := Right.Idx;
-          end
-          else if SameText(LF.FieldName, 'rank') or SameText(LF.FieldName, 'orden') then
-          begin
-            LV := Left.Orden;
-            RV := Right.Orden;
-          end
-          else if SameText(LF.FieldName, 'model') then
-          begin
-            LV := Left.Model;
-            RV := Right.Model;
-          end
-          else if SameText(LF.FieldName, 'id') or SameText(LF.FieldName, 'tag') then
-          begin
-            LV := Left.Tag;
-            RV := Right.Tag;
-          end
-          else
-          begin
-            LV := '';
-            RV := '';
-            if Assigned(Left.MetaData)  and Left.MetaData.Has(LF.FieldName)  then LV := Left.MetaData.Get(LF.FieldName, Null);
-            if Assigned(Right.MetaData) and Right.MetaData.Has(LF.FieldName) then RV := Right.MetaData.Get(LF.FieldName, Null);
-          end;
-
-          // Compare values
-          try
-            if VarIsNumeric(LV) and VarIsNumeric(RV) then
-            begin
-              if Double(LV) < Double(RV) then Cmp := -1
-              else if Double(LV) > Double(RV) then Cmp := 1
-              else Cmp := 0;
-            end
+            if LMissing and RMissing then
+              Continue;
+            if LMissing then
+              Exit(1)
             else
-              Cmp := AnsiCompareStr(VarToStr(LV), VarToStr(RV));
-          except
-            Cmp := 0;
+              Exit(-1);
           end;
-
-          // Apply direction
-          if LF.Direction = odDesc then
+          if not AiCompareValues(LV, RV, Cmp) then
+            Continue;
+          if LocalFields[k].Direction = odDesc then
             Cmp := -Cmp;
-
           if Cmp <> 0 then
-          begin
-            Result := Cmp;
-            Exit;
-          end;
+            Exit(Cmp);
         end;
+        Result := CompareValue(Position[Left], Position[Right]);
       end));
   finally
+    Position.Free;
     LocalFields.Free;
   end;
 end;
@@ -1589,16 +1596,35 @@ var
 begin
   SB := TStringBuilder.Create;
   try
-    case AReq.Mode of
-      smHybrid:
-        ModeStr := Format('HYBRID (Semantic: %.0f%% | Lexical: %.0f%%)',
-          [AReq.WeightSemantic * 100, AReq.WeightLexical * 100]);
-      smEmbeddings: ModeStr := 'EMBEDDINGS only';
-      smBM25:       ModeStr := 'BM25 (lexical) only';
-    else             ModeStr := 'HYBRID';
-    end;
+    // Sin USING / FUSION la consulta usa las SearchOptions del componente: el plan muestra esas
+    if not AReq.UsingSpecified then
+    begin
+      if FSearchOptions.UseEmbeddings and FSearchOptions.UseBM25 then
+        ModeStr := Format('HYBRID (Semantic: %.0f%% | Lexical: %.0f%%), from SearchOptions',
+          [FSearchOptions.EmbeddingWeight * 100, FSearchOptions.BM25Weight * 100], TFormatSettings.Invariant)
+      else if FSearchOptions.UseBM25 then
+        ModeStr := 'BM25 (lexical) only, from SearchOptions'
+      else
+        ModeStr := 'EMBEDDINGS only, from SearchOptions';
+    end
+    else
+      case AReq.Mode of
+        smHybrid:
+          ModeStr := Format('HYBRID (Semantic: %.0f%% | Lexical: %.0f%%)',
+            [AReq.WeightSemantic * 100, AReq.WeightLexical * 100], TFormatSettings.Invariant);
+        smEmbeddings: ModeStr := 'EMBEDDINGS only';
+        smBM25:       ModeStr := 'BM25 (lexical) only';
+      else             ModeStr := 'HYBRID';
+      end;
 
-    if AReq.Fusion = fmRRF then FusionStr := 'RRF' else FusionStr := 'Weighted Score Fusion';
+    if AReq.FusionSpecified then
+    begin
+      if AReq.Fusion = fmRRF then FusionStr := 'RRF' else FusionStr := 'Weighted Score Fusion';
+    end
+    else if FSearchOptions.UseRRF then
+      FusionStr := 'RRF, from SearchOptions'
+    else
+      FusionStr := 'Weighted Score Fusion, from SearchOptions';
 
     if AReq.UseMMR then
       OptimStr := Format('MMR (lambda=%.2f)', [AReq.MmrLambda])
@@ -1630,7 +1656,8 @@ begin
     SB.AppendLine('Query     : ' + AReq.Query);
     SB.AppendLine('Mode      : ' + ModeStr);
     SB.AppendLine('Fusion    : ' + FusionStr);
-    SB.AppendLine('Language  : ' + AReq.Language);
+    if AReq.LanguageSpecified then
+      SB.AppendLine('Language  : ' + AReq.Language + ' (the BM25 index language is set when indexing)');
     SB.AppendLine('Rerank    : ' + IfThen(AReq.RerankQuery <> '', AReq.RerankQuery, '(none)'));
     if AReq.MinGlobal > 0 then
       SB.AppendLine(Format('Threshold : GLOBAL %.4f', [AReq.MinGlobal]));
@@ -2207,6 +2234,12 @@ begin
 end;
 
 function TAiRAGVector.Search(Target: TAiEmbeddingNode; aLimit: Integer; aPrecision: Double; aFilter: TAiFilterCriteria): TAiRAGVector;
+begin
+  Result := SearchWith(Target, aLimit, aPrecision, aFilter, FSearchOptions, FEntidad);
+end;
+
+function TAiRAGVector.SearchWith(Target: TAiEmbeddingNode; aLimit: Integer; aPrecision: Double; aFilter: TAiFilterCriteria;
+  AOptions: TAiSearchOptions; const AEntidad: string): TAiRAGVector;
 var
   Handled: Boolean;
   VectorResults: TList<TAiSearchResult>;
@@ -2218,12 +2251,14 @@ var
 begin
   Result := nil;
   Handled := False;
+  if AOptions = nil then
+    AOptions := FSearchOptions;
 
-  if FSearchOptions.UseEmbeddings and (Target.MagnitudeValue <= 0) then
+  if AOptions.UseEmbeddings and (Target.MagnitudeValue <= 0) then
   begin
     // Si no hay vector en la pregunta, la b�squeda sem�ntica es imposible.
     // Podr�amos lanzar excepci�n o degradar autom�ticamente a BM25.
-    if not FSearchOptions.UseBM25 then
+    if not AOptions.UseBM25 then
       raise Exception.Create(AiStr('rag.query_no_vector'));
   end;
 
@@ -2242,7 +2277,7 @@ begin
   // ---------------------------------------------------------------------------
   if Assigned(FDriver) then
   begin
-    Result := FDriver.Search(Target, FEntidad, aLimit, aPrecision, aFilter, FSearchOptions);
+    Result := FDriver.Search(Target, AEntidad, aLimit, aPrecision, aFilter, AOptions);
     Exit;
   end;
 
@@ -2257,7 +2292,7 @@ begin
       // =======================================================================
       // SUBFASE A: B�SQUEDA VECTORIAL
       // =======================================================================
-      if FSearchOptions.UseEmbeddings then
+      if AOptions.UseEmbeddings then
       begin
         if not Assigned(FRagIndex) then
           raise Exception.Create(AiStr('rag.no_index'));
@@ -2268,14 +2303,14 @@ begin
         // Si hay filtro o evento, usamos b�squeda lineal segura
         if ((Assigned(aFilter) and (aFilter.Count > 0)) or Assigned(FOnFilterItem)) then
         begin
-          VectorResults := InternalSearchSafe(Target, Max(50, aLimit * 5), FSearchOptions.MinAbsoluteScoreEmbedding, aFilter);
+          VectorResults := InternalSearchSafe(Target, Max(50, aLimit * 5), AOptions.MinAbsoluteScoreEmbedding, aFilter);
         end
         else
         begin
           // V�a r�pida: �ndice vectorial (HNSW / Basic)
           // Each hit with the score the index computed (SearchScored). Rebuilding it from
           // Node.Idx returned stale scores with TAIBasicEmbeddingIndex, which never writes Idx.
-          VectorResults := FRagIndex.SearchScored(Target, Max(50, aLimit * 5), FSearchOptions.MinAbsoluteScoreEmbedding);
+          VectorResults := FRagIndex.SearchScored(Target, Max(50, aLimit * 5), AOptions.MinAbsoluteScoreEmbedding);
         end;
 
         // Normalizaci�n vectorial [0..1]
@@ -2285,13 +2320,13 @@ begin
       // =======================================================================
       // SUBFASE B: B�SQUEDA L�XICA (BM25)
       // =======================================================================
-      if FSearchOptions.UseBM25 and (Target.Text.Trim <> '') then
+      if AOptions.UseBM25 and (Target.Text.Trim <> '') then
       begin
         LexicalRes := FBm25Index.Search(Target.Text, Max(50, aLimit * 5), aFilter);
 
         // Filtro A: dignidad BM25
         for i := LexicalRes.Count - 1 downto 0 do
-          if LexicalRes[i].Key < FSearchOptions.MinAbsoluteScoreBM25 then
+          if LexicalRes[i].Key < AOptions.MinAbsoluteScoreBM25 then
             LexicalRes.Delete(i);
 
         // Normalizaci�n l�xica [0..1]
@@ -2324,10 +2359,10 @@ begin
       else if Assigned(VectorResults) and Assigned(LexicalRes) then
       begin
         // H�BRIDO
-        if FSearchOptions.UseRRF then
+        if AOptions.UseRRF then
           Result := ReciprocalRankFusion(VectorResults, LexicalRes, aLimit)
         else
-          Result := WeightedScoreFusion(VectorResults, LexicalRes, aLimit);
+          Result := WeightedScoreFusion(VectorResults, LexicalRes, aLimit, AOptions);
       end
       else
         Result := TAiRAGVector.Create(nil, False);
@@ -2352,7 +2387,7 @@ begin
         Result.FModel := Self.Model;
         Result.FDim := Self.Dim;
 
-        if FSearchOptions.UseReorderABC and (Result.Count > 2) then
+        if AOptions.UseReorderABC and (Result.Count > 2) then
           ApplyContextReordering(Result);
       end;
 
@@ -2368,10 +2403,18 @@ begin
 end;
 
 function TAiRAGVector.Search(Prompt: String; aLimit: Integer; aPrecision: Double; aFilter: TAiFilterCriteria): TAiRAGVector;
+begin
+  Result := SearchWith(Prompt, aLimit, aPrecision, aFilter, FSearchOptions, FEntidad);
+end;
+
+function TAiRAGVector.SearchWith(const Prompt: string; aLimit: Integer; aPrecision: Double; aFilter: TAiFilterCriteria;
+  AOptions: TAiSearchOptions; const AEntidad: string): TAiRAGVector;
 var
   Target: TAiEmbeddingNode;
   LSpan: TAiSpan;
 begin
+  if AOptions = nil then
+    AOptions := FSearchOptions;
   // 1. Verificaci�n de Motor de Embeddings
   // Sin esto, no podemos convertir el texto 'Prompt' en n�meros.
   if Not Assigned(FEmbeddings) and Not Assigned(FOnGetEmbedding) then
@@ -2380,8 +2423,8 @@ begin
   // Telemetria: el span cubre embedding de la query + retrieval completo
   LSpan := AiSpanStart('rag.search', skInternal);
   AiSpanAttr(LSpan, 'rag.top_k', Int64(aLimit));
-  AiSpanAttr(LSpan, 'rag.hybrid.embeddings', FSearchOptions.UseEmbeddings);
-  AiSpanAttr(LSpan, 'rag.hybrid.bm25', FSearchOptions.UseBM25);
+  AiSpanAttr(LSpan, 'rag.hybrid.embeddings', AOptions.UseEmbeddings);
+  AiSpanAttr(LSpan, 'rag.hybrid.bm25', AOptions.UseBM25);
   try
     // 2. Vectorizaci�n
     // CreateEmbeddingNode se encarga de llamar al API de embeddings o al evento
@@ -2389,7 +2432,7 @@ begin
     try
       // 3. Delegaci�n
       // Llamamos a la sobrecarga principal que busca por Nodo + Filtro Criteria
-      Result := Search(Target, aLimit, aPrecision, aFilter);
+      Result := SearchWith(Target, aLimit, aPrecision, aFilter, AOptions, AEntidad);
       if Assigned(Result) then
         AiSpanAttr(LSpan, 'rag.results', Int64(Result.Count));
       AiSpanEnd(LSpan);
@@ -2593,6 +2636,12 @@ begin
 end;
 
 function TAiRAGVector.WeightedScoreFusion(VectorResults: TList<TAiSearchResult>; LexicalResults: TList<TPair<Double, TAiEmbeddingNode>>; aLimit: Integer): TAiRAGVector;
+begin
+  Result := WeightedScoreFusion(VectorResults, LexicalResults, aLimit, FSearchOptions);
+end;
+
+function TAiRAGVector.WeightedScoreFusion(VectorResults: TList<TAiSearchResult>; LexicalResults: TList<TPair<Double, TAiEmbeddingNode>>; aLimit: Integer;
+  AOptions: TAiSearchOptions): TAiRAGVector;
 var
   Scores: TDictionary<TAiEmbeddingNode, Double>;
   Node: TAiEmbeddingNode;
@@ -2610,12 +2659,12 @@ begin
     // 1. NORMALIZACI�N INTERNA DE PESOS
     // Aseguramos que la suma de pesos sea exactamente 1.0 para no diluir el score
     // -------------------------------------------------------------------------
-    TotalWeight := FSearchOptions.EmbeddingWeight + FSearchOptions.BM25Weight;
+    TotalWeight := AOptions.EmbeddingWeight + AOptions.BM25Weight;
 
     if TotalWeight > 0 then
     begin
-      W_Sem := FSearchOptions.EmbeddingWeight / TotalWeight;
-      W_Lex := FSearchOptions.BM25Weight / TotalWeight;
+      W_Sem := AOptions.EmbeddingWeight / TotalWeight;
+      W_Lex := AOptions.BM25Weight / TotalWeight;
     end
     else
     begin

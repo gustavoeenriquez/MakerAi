@@ -422,7 +422,8 @@ var
 
       if Criterion.IsGroup then
       begin
-        SB.Append(Indent + '  [GRUPO ' + IfThen(Criterion.SubCriteria.LogicalOp = loAnd, 'AND', 'OR') + ']').AppendLine;
+        SB.Append(Indent + '  [' + IfThen(Criterion.Negated, 'NOT ', '') + 'GRUPO ' +
+          IfThen(Criterion.SubCriteria.LogicalOp = loAnd, 'AND', 'OR') + ']').AppendLine;
         RenderCriteria(Criterion.SubCriteria, Indent + '    ');
       end
       else
@@ -449,7 +450,7 @@ var
           OpStr := '???';
         end;
 
-        SB.Append(Indent + '  [+] ' + Criterion.Key + ' ' + OpStr);
+        SB.Append(Indent + '  [+] ' + Criterion.Key + ' ' + IfThen(Criterion.Negated, 'NOT ', '') + OpStr);
 
         if not (Criterion.Op in [foIsNull, foIsNotNull, foExists]) then
         begin
