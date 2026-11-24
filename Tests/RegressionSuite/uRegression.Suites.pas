@@ -570,6 +570,11 @@ begin
     .ExpectEquals('Ana||Ana,Bruno|carla,Dario|Bruno,carla,Dario|Dario|Ana,Bruno,carla,Dario|Ana|' +
       'error|error|error|error|error|Ana|Ana');
 
+  // VQL fase 4 (nov 24/2026): metadatos con listas por JSON (lo que guardan los drivers)
+  FRunner.AddCase('rag.metadata.json-list')
+    .Input('rag:vql:json-list')
+    .ExpectEquals('["cafe",7,true],42,1.5|True|cafe,7,True|Int64,Double');
+
   FRunner.AddCase('rag.vql.syntax-errors')
     .Input('rag:vql:syntax-errors')
     .ExpectEquals('error|error|error|error|error|error|error|error');
@@ -5936,6 +5941,31 @@ begin
         QP('SEARCH ''x'' WHERE autor = $', []) + '|' +
         QP('MATCH ($e) SEARCH ''x'' WHERE autor = ''Ana''', ['e', 'DEFAULT']) + '|' +
         QP('SEARCH ''x'' WHERE codigo = $c', ['c', 10])
+
+    else if Id = 'json-list' then
+    begin
+      // Metadatos con una lista van y vuelven por JSON (los drivers guardan asi). Antes ToJSON
+      // lanzaba EVariantTypeCastError con un arreglo y FromJSON lo perdia
+      M := TAiEmbeddingMetaData.Create;
+      try
+        M['tags'] := VarArrayOf(['cafe', 7, True]);
+        M['n'] := 42;
+        M['x'] := 1.5;
+        var J := M.ToJSON;
+        try
+          Txt := J.GetValue('tags').ToJSON + ',' + J.GetValue('n').ToJSON + ',' + J.GetValue('x').ToJSON;
+          M.Clear;
+          M.FromJSON(J);
+        finally
+          J.Free;
+        end;
+        Result := Txt + '|' + BoolToStr(VarIsArray(M['tags']), True) + '|' + VarToStr(M['tags'][0]) + ',' +
+          VarToStr(M['tags'][1]) + ',' + BoolToStr(M['tags'][2], True) + '|' + VarTypeAsText(VarType(M['n'])) + ',' +
+          VarTypeAsText(VarType(M['x']));
+      finally
+        M.Free;
+      end;
+    end
 
     else if Id = 'syntax-errors' then
       Result := All([

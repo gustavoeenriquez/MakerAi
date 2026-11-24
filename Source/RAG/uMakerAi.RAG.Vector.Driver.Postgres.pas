@@ -32,6 +32,7 @@ type
   TJSONBFilterCondition = class
   private
     FPath: string;
+    FJsonPath: string; // properties->'k' / properties #> '{a,b}'; vacio en columnas (content, model)
     FOperator: TFilterOperator; // Usamos el enum unificado
     FValue: Variant;
     FSecondValue: Variant;
@@ -44,6 +45,7 @@ type
     function ToSQL(AParamIndex: Integer; AParams: TList<TQueryParamValue>): string;
 
     property SecondValue: Variant read FSecondValue write FSecondValue;
+    property JsonPath: string read FJsonPath write FJsonPath;
   end;
 
   // Builder para construir la cl�usula WHERE
@@ -53,6 +55,7 @@ type
     FParamCounter: Integer;
     FParams: TList<TQueryParamValue>;
     function BuildPath(const AKey: string; AOperator: TFilterOperator): string;
+    function BuildJsonPath(const AKey: string): string;
     function InferDataType(const AValue: Variant): TJSONBDataType;
     function Process(ACriteria: TAiFilterCriteria): string;
   public
@@ -214,99 +217,236 @@ begin
   end;
 end;
 
+// Traduce una condicion con la misma semantica que el filtro en memoria
+// (TAiEmbeddingMetaData.Evaluate / AiCompareValues). Todo va como literal (sin parametros de
+// FireDAC) y sin el operador '?' de JSONB, que FireDAC toma por un parametro:
+// - Numeros: el texto del campo se convierte solo si parece un numero; uno que no (un 'N/A')
+//   da NULL y no se cumple. Antes ::integer/::numeric directo hacia fallar la consulta entera
+//   en cuanto una fila tenia otra cosa (y ::integer fallaba con 42000.0).
+// - Un texto que parece numero ('10') se compara como numero si el campo tambien lo es.
+// - Texto: '=' distingue mayusculas; el orden no (desempata con ellas), como CompareText.
+// - CONTAINS, STARTS_WITH, ENDS_WITH: sin distinguir mayusculas y sin comodines (antes CONTAINS
+//   era '@>' de JSONB: igualdad exacta del valor); CONTAINS sobre una lista es pertenencia.
+// - EXISTS_ANY/EXISTS_ALL: elementos de la lista del campo (antes '?|', que mira claves).
+// - NOT: un campo que falta no se cumple ni negado, como en memoria.
 function TJSONBFilterCondition.ToSQL(AParamIndex: Integer; AParams: TList<TQueryParamValue>): string;
-// All values are inlined into the SQL literal — no FireDAC parameters, avoids PQexecParams null-byte bug on Linux.
+const
+  NUM_RE = '^\s*[-+]?([0-9]+\.?[0-9]*|\.[0-9]+)([eE][-+]?[0-9]+)?\s*$';
+  DATE_RE = '^[0-9]{4}-[0-9]{2}-[0-9]{2}';
 var
-  CastType, ValStr, SQLOp: string;
   I: Integer;
-  ParamList: TStringList;
-  KeyName, JsonValue: string;
+  Parts: TStringList;
+  Values: TArray<Variant>;
+  Body: string;
+
+  function Q(const S: string): string;
+  begin
+    Result := QuotedStr(S.Replace(#0, ''));
+  end;
+
+  function IsNumType(const V: Variant): Boolean;
+  begin
+    Result := VarIsNumeric(V) and ((VarType(V) and varTypeMask) <> varBoolean);
+  end;
+
+  // Literal numerico: de un numero o de un texto que parece numero
+  function TryNumLit(const V: Variant; out ALit: string): Boolean;
+  var
+    D: Double;
+  begin
+    Result := False;
+    if VarIsArray(V) or VarIsNull(V) or VarIsEmpty(V) then
+      Exit;
+    if IsNumType(V) then
+    begin
+      ALit := AiFilterValueToText(V);
+      Exit(True);
+    end;
+    if ((VarType(V) and varTypeMask) <> varDate) and ((VarType(V) and varTypeMask) <> varBoolean) and
+      TryStrToFloat(Trim(VarToStr(V)), D, TFormatSettings.Invariant) then
+    begin
+      ALit := FloatToStr(D, TFormatSettings.Invariant);
+      Exit(True);
+    end;
+  end;
+
+  function NumOf(const P: string): string;
+  begin
+    Result := '(CASE WHEN ' + P + ' ~ ' + Q(NUM_RE) + ' THEN (' + P + ')::numeric END)';
+  end;
+
+  function SqlOp(AOp: TFilterOperator): string;
+  begin
+    case AOp of
+      foNotEqual: Result := '<>';
+      foGreater: Result := '>';
+      foGreaterOrEqual: Result := '>=';
+      foLess: Result := '<';
+      foLessOrEqual: Result := '<=';
+    else
+      Result := '=';
+    end;
+  end;
+
+  // Texto contra texto: '=' y '<>' exactos; el orden como CompareText (ASCII sin mayusculas,
+  // en orden de bytes) y, si empatan, con mayusculas
+  function TextCmp(const P: string; AOp: TFilterOperator; const S: string): string;
+  var
+    UP, US, StrictOp: string;
+  begin
+    if AOp in [foEqual, foNotEqual] then
+      Exit('(' + P + ' ' + SqlOp(AOp) + ' ' + Q(S) + ')');
+    UP := 'upper(' + P + ') COLLATE "C"';
+    US := 'upper(' + Q(S) + ') COLLATE "C"';
+    if AOp in [foGreater, foGreaterOrEqual] then
+      StrictOp := '>'
+    else
+      StrictOp := '<';
+    Result := '((' + UP + ' ' + StrictOp + ' ' + US + ') OR (' + UP + ' = ' + US + ' AND ' + P + ' COLLATE "C" ' +
+      SqlOp(AOp) + ' ' + Q(S) + '))';
+  end;
+
+  // Comparacion de un campo (texto P, JSON J) con un valor, como AiCompareValues
+  function Cmp(const P, J: string; AOp: TFilterOperator; const V: Variant): string;
+  var
+    Lit: string;
+  begin
+    if VarIsNull(V) or VarIsEmpty(V) or VarIsArray(V) then
+      Exit('(NULL::boolean)');
+    case VarType(V) and varTypeMask of
+      varBoolean:
+        Exit('(lower(' + P + ') IN (''true'', ''false'') AND lower(' + P + ') ' + SqlOp(AOp) + ' ' +
+          Q(LowerCase(BoolToStr(V, True))) + ')');
+      varDate:
+        Exit('((CASE WHEN ' + P + ' ~ ' + Q(DATE_RE) + ' THEN (' + P + ')::timestamp END) ' + SqlOp(AOp) + ' ' +
+          Q(FormatDateTime('yyyy-mm-dd"T"hh:nn:ss.zzz', VarToDateTime(V))) + '::timestamp)');
+    end;
+    if TryNumLit(V, Lit) then
+    begin
+      if IsNumType(V) then
+        Exit('(' + NumOf(P) + ' ' + SqlOp(AOp) + ' ' + Lit + ')');
+      // Texto que parece numero: como numero si el campo lo es; si no, como texto
+      Exit('(CASE WHEN ' + P + ' ~ ' + Q(NUM_RE) + ' THEN (' + P + ')::numeric ' + SqlOp(AOp) + ' ' + Lit + ' ELSE ' +
+        TextCmp(P, AOp, VarToStr(V)) + ' END)');
+    end;
+    // Texto que no es numero: no se compara con un numero JSON (en memoria tampoco)
+    if J <> '' then
+      Result := '(coalesce(jsonb_typeof(' + J + '), ''string'') <> ''number'' AND ' + TextCmp(P, AOp, VarToStr(V)) + ')'
+    else
+      Result := TextCmp(P, AOp, VarToStr(V));
+  end;
+
+  // El campo es una lista JSON y algun elemento es igual a V
+  function InList(const J: string; const V: Variant): string;
+  begin
+    Result := 'EXISTS (SELECT 1 FROM jsonb_array_elements_text(' + J + ') AS e(v) WHERE ' + Cmp('e.v', '', foEqual, V) + ')';
+  end;
+
+  function ValuesOf(const V: Variant): TArray<Variant>;
+  var
+    K: Integer;
+  begin
+    if VarIsArray(V) then
+    begin
+      SetLength(Result, VarArrayHighBound(V, 1) - VarArrayLowBound(V, 1) + 1);
+      for K := 0 to High(Result) do
+        Result[K] := VarArrayGet(V, [VarArrayLowBound(V, 1) + K]);
+    end
+    else
+      Result := [V];
+  end;
+
+  function IsArrayJson(const J: string): string;
+  begin
+    Result := 'jsonb_typeof(' + J + ') = ''array''';
+  end;
+
 begin
-  case FDataType of
-    jdtString:   CastType := 'text';
-    jdtInteger:  CastType := 'integer';
-    jdtFloat:    CastType := 'numeric';
-    jdtBoolean:  CastType := 'boolean';
-    jdtDate:     CastType := 'date';
-    jdtDateTime: CastType := 'timestamp';
-  else
-    CastType := 'text';
-  end;
+  Parts := TStringList.Create;
+  try
+    case FOperator of
+      foEqual, foNotEqual, foGreater, foGreaterOrEqual, foLess, foLessOrEqual:
+        Body := Cmp(FPath, FJsonPath, FOperator, FValue);
 
-  case FOperator of
-    foEqual, foNotEqual, foGreater, foGreaterOrEqual, foLess, foLessOrEqual:
-      Result := Format('((%s)::%s %s %s)', [FPath, CastType, GetSQLOperator, FormatValue(FValue)]);
+      foBetween:
+        Body := '(' + Cmp(FPath, FJsonPath, foGreaterOrEqual, FValue) + ' AND ' +
+          Cmp(FPath, FJsonPath, foLessOrEqual, FSecondValue) + ')';
 
-    foLike, foILike, foStartsWith, foEndsWith:
-      begin
-        SQLOp := IfThen(FOperator = foILike, 'ILIKE', 'LIKE');
-        ValStr := VarToStr(FValue);
-        if FOperator = foStartsWith then ValStr := ValStr + '%'
-        else if FOperator = foEndsWith then ValStr := '%' + ValStr;
-        Result := Format('((%s)::text %s %s)', [FPath, SQLOp, QuotedStr(ValStr)]);
-      end;
-
-    foContains:
-      begin
-        KeyName := FPath.Replace('properties->>''', '').Replace('properties #>> ''{', '').Replace('}''', '').Replace('''', '');
-        if VarIsNumeric(FValue) then JsonValue := VarToStr(FValue).Replace(',', '.')
-        else if (VarType(FValue) and varTypeMask) = varBoolean then JsonValue := IfThen(Boolean(FValue), 'true', 'false')
-        else if VarIsNull(FValue) then JsonValue := 'null'
-        else JsonValue := '"' + VarToStr(FValue).Replace('"', '\"') + '"';
-        Result := Format('(properties @> CAST(%s AS jsonb))', [QuotedStr('{"' + KeyName + '": ' + JsonValue + '}')]);
-      end;
-
-    foExists:
-      Result := Format('(properties ? %s)', [QuotedStr(FPath.Replace('properties->>''', '').Replace('''', ''))]);
-
-    foExistsAny, foExistsAll:
-      begin
-        SQLOp := IfThen(FOperator = foExistsAny, '?|', '?&');
-        if VarIsArray(FValue) then
+      foIn, foNotIn:
         begin
-          ParamList := TStringList.Create;
-          try
-            for I := VarArrayLowBound(FValue, 1) to VarArrayHighBound(FValue, 1) do
-              ParamList.Add(QuotedStr(VarToStr(VarArrayGet(FValue, [I]))));
-            Result := Format('(properties %s ARRAY[%s]::text[])', [SQLOp, String.Join(',', ParamList.ToStringArray)]);
-          finally
-            ParamList.Free;
-          end;
-        end
-        else
-          raise Exception.Create(AiStr('rag.pg.exists_array'));
-      end;
+          Values := ValuesOf(FValue);
+          for I := 0 to High(Values) do
+            Parts.Add(Cmp(FPath, FJsonPath, foEqual, Values[I]));
+          if Parts.Count = 0 then
+            Body := '(FALSE)'
+          else
+            Body := '(' + String.Join(' OR ', Parts.ToStringArray) + ')';
+          // NOT IN: el campo existe y ningun valor es igual (un NULL adentro cuenta como distinto)
+          if FOperator = foNotIn then
+            Body := '((' + FPath + ') IS NOT NULL AND NOT COALESCE(' + Body + ', FALSE))';
+        end;
 
-    foIn, foNotIn:
-      begin
-        if VarIsArray(FValue) then
+      foLike, foILike:
+        // '\' escapa % y _ en los dos lados (en memoria, AiLikeMatch)
+        Body := '((' + FPath + ') ' + IfThen(FOperator = foILike, 'ILIKE', 'LIKE') + ' ' + Q(AiFilterValueToText(FValue)) + ')';
+
+      foContains:
         begin
-          ParamList := TStringList.Create;
-          try
-            for I := VarArrayLowBound(FValue, 1) to VarArrayHighBound(FValue, 1) do
-              ParamList.Add(FormatValue(VarArrayGet(FValue, [I])));
-            Result := Format('((%s)::%s %s (%s))', [FPath, CastType, GetSQLOperator, String.Join(',', ParamList.ToStringArray)]);
-          finally
-            ParamList.Free;
+          Body := '(position(lower(' + Q(AiFilterValueToText(FValue)) + ') in lower(' + FPath + ')) > 0)';
+          if FJsonPath <> '' then
+            Body := '(CASE WHEN ' + IsArrayJson(FJsonPath) + ' THEN ' + InList(FJsonPath, FValue) + ' ELSE ' + Body + ' END)';
+        end;
+
+      foStartsWith:
+        Body := '(left(lower(' + FPath + '), length(' + Q(AiFilterValueToText(FValue)) + ')) = lower(' +
+          Q(AiFilterValueToText(FValue)) + '))';
+      foEndsWith:
+        Body := '(right(lower(' + FPath + '), length(' + Q(AiFilterValueToText(FValue)) + ')) = lower(' +
+          Q(AiFilterValueToText(FValue)) + '))';
+
+      foExistsAny, foExistsAll:
+        begin
+          if FJsonPath = '' then
+            Body := '(FALSE)'
+          else
+          begin
+            Values := ValuesOf(FValue);
+            for I := 0 to High(Values) do
+              Parts.Add(InList(FJsonPath, Values[I]));
+            if Parts.Count = 0 then
+              Body := '(FALSE)'
+            else
+              Body := '(' + IsArrayJson(FJsonPath) + ' AND (' +
+                String.Join(IfThen(FOperator = foExistsAny, ' OR ', ' AND '), Parts.ToStringArray) + '))';
           end;
-        end
+        end;
+
+      foExists:
+        if FJsonPath = '' then
+          Body := '(TRUE)' // content / model: siempre estan
         else
-          Result := Format('((%s)::%s %s (%s))', [FPath, CastType, GetSQLOperator, FormatValue(FValue)]);
-      end;
+          Body := '((' + FJsonPath + ') IS NOT NULL)';
 
-    foBetween:
-      Result := Format('((%s)::%s BETWEEN %s AND %s)', [FPath, CastType, FormatValue(FValue), FormatValue(FSecondValue)]);
+      foIsNull:
+        Body := '((' + FPath + ') IS NULL)';
+      foIsNotNull:
+        Body := '((' + FPath + ') IS NOT NULL)';
+    else
+      Body := '(1=1)';
+    end;
 
-    foIsNull:
-      Result := Format('((%s) IS NULL)', [FPath]);
-    foIsNotNull:
-      Result := Format('((%s) IS NOT NULL)', [FPath]);
-  else
-    Result := '(1=1)';
+    // NOT de una condicion: como en memoria, un campo que falta (o NULL) no se cumple
+    if FIsNegated then
+    begin
+      if FOperator in [foIsNull, foIsNotNull, foExists] then
+        Body := 'NOT ' + Body
+      else
+        Body := '((' + FPath + ') IS NOT NULL AND NOT COALESCE(' + Body + ', FALSE))';
+    end;
+    Result := Body;
+  finally
+    Parts.Free;
   end;
-
-  if FIsNegated then
-    Result := 'NOT (' + Result + ')';
 end;
 
 { TJSONBFilterBuilder }
@@ -335,40 +475,30 @@ begin
   end;
 end;
 
+// Ruta de texto del campo. 'text' es la columna content y 'model' la columna model; con
+// puntos (user.name) es una ruta dentro del JSON. La clave va entre comillas escapadas: antes
+// se pegaba tal cual y una clave con una comilla rompia (o cambiaba) el SQL
 function TJSONBFilterBuilder.BuildPath(const AKey: string; AOperator: TFilterOperator): string;
-var
-  Parts: TArray<string>;
-  I: Integer;
-  JsonPath: string;
 begin
-  // 1. Mapeo de campos virtuales / Columnas directas
   if SameText(AKey, 'text') then
-    Exit('content'); // El campo 'text' en VGQL apunta a la columna 'content' en Postgres
-
+    Exit('content');
   if SameText(AKey, 'model') then
-    Exit('model'); // Opcional: permitir filtrar por el nombre del modelo directamente
-
-  // 2. Si la llave tiene puntos (ej: user.name), usamos la sintaxis de rutas de Postgres #>>
+    Exit('model');
   if AKey.Contains('.') then
-  begin
-    Parts := AKey.Split(['.']);
-    JsonPath := '{';
-    for I := 0 to High(Parts) do
-    begin
-      if I > 0 then
-        JsonPath := JsonPath + ',';
-      JsonPath := JsonPath + Parts[I];
-    end;
-    JsonPath := JsonPath + '}';
-
-    // El operador #>> devuelve el valor como TEXT
-    Result := Format('properties #>> ''%s''', [JsonPath]);
-  end
+    Result := 'properties #>> ' + QuotedStr('{' + String.Join(',', AKey.Split(['.'])) + '}')
   else
-  begin
-    // 3. Si es una llave simple, usamos el operador est�ndar ->> (devuelve TEXT)
-    Result := Format('properties->>''%s''', [AKey]);
-  end;
+    Result := 'properties->>' + QuotedStr(AKey);
+end;
+
+// Ruta JSON (para el tipo y las listas); vacia en las columnas
+function TJSONBFilterBuilder.BuildJsonPath(const AKey: string): string;
+begin
+  if SameText(AKey, 'text') or SameText(AKey, 'model') then
+    Exit('');
+  if AKey.Contains('.') then
+    Result := 'properties #> ' + QuotedStr('{' + String.Join(',', AKey.Split(['.'])) + '}')
+  else
+    Result := 'properties->' + QuotedStr(AKey);
 end;
 
 function TJSONBFilterBuilder.BuildSQL(ACriteria: TAiFilterCriteria): string;
@@ -455,6 +585,7 @@ begin
         try
           if Criterion.Op = foBetween then
             Cond.SecondValue := Criterion.Value2;
+          Cond.JsonPath := BuildJsonPath(Criterion.Key);
           // NOT LIKE, NOT BETWEEN...: NOT ( ... ); un campo que falta da NULL y no se cumple
           Cond.FIsNegated := Criterion.Negated;
 

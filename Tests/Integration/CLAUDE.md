@@ -12,7 +12,7 @@ No confundir con las otras dos carpetas de `Tests/`:
 |---|---|---|
 | `Tests/RegressionSuite` | El comportamiento del framework, in-process, ~5 s. **Correr antes de cada release** | Ninguna |
 | `Tests/Interop` | Que el formato de cable A2A sea el de la spec (contra el SDK oficial en Python) | Ninguna |
-| `Tests/Integration` (esta) | Un issue o subsistema contra el API real | Las del proveedor (salvo 069 y 070) |
+| `Tests/Integration` (esta) | Un issue o subsistema contra el API real | Las del proveedor (salvo 069, 070 y 071) |
 
 ## Proyectos
 
@@ -22,6 +22,7 @@ No confundir con las otras dos carpetas de `Tests/`:
 | `068-AsyncHistoryTest` | Issue #105: en asíncrono Claude archiva sus respuestas en el historial; conversación de 3 turnos donde el último debe recordar los anteriores. `claude-haiku-5-5`; PASS nov 6/2026 | `CLAUDE_API_KEY` |
 | `069-McpSessionGateTest` | Issue #110: vetting de cliente MCP (`OnClientConnect`) y gate de sesión HTTP por `Mcp-Session-Id`. Levanta un `TAiMCPHttpServer` real y lo prueba como cliente en 4 fases. 18/18 PASS nov 6/2026 | Ninguna (in-process) |
 | `070-GqlPostgresTest` | MakerGQL contra PostgreSQL real (`TAiRagGraphPostgresDriver`): cada fase abre un `TAiRagGraph` nuevo sobre las mismas tablas, así lo leído viene de la base y lo escrito se comprueba con SQL. `CREATE`, lecturas en un grafo recién abierto (recorridos en los dos sentidos, `$parámetros`, `BETWEEN`, agregados, `OPTIONAL MATCH`, `EXISTS`, longitud variable, `SIMILAR TO`, `SHORTEST PATH`, `MATCH (n)`, `SHOW SCHEMA`/`PROPERTIES`, `GET COMMUNITIES`), escrituras (`SET` de propiedad, nombre y etiqueta, `REMOVE`, `SET` en relación, `MERGE`, `DELETE`, `DETACH DELETE`) y relectura. Crea y borra `gqltest_nodes`/`_nodes_chunks`/`_edges` (`-keep` las deja); embeddings falsos por palabras clave. 50/50 PASS nov 24/2026 | PostgreSQL con pgvector y las variables `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD`; no gasta |
+| `071-VqlPostgresTest` | VQL contra PostgreSQL real (`TAiRAGVectorPostgresDriver`): los mismos 6 documentos en un `TAiRAGVector` en memoria y en otro con el driver, embeddings iguales (decide el `WHERE`); cada consulta corre en los dos y debe dar lo mismo, y varias tienen además el resultado escrito. 48 consultas: igualdad y mayúsculas, números (también en texto y un `'N/A'` en la columna), texto (`LIKE`/`ILIKE`, orden, `CONTAINS`/`STARTS_WITH`/`ENDS_WITH`, `text`), listas (`CONTAINS`, `EXISTS_ANY`/`EXISTS_ALL` y su `NOT`), `IS NULL`, `EXISTS(...)`, `NOT` en sus formas, fechas (también `$d` con `TDateTime`) y parámetros con inyección. Crea y borra la tabla `vqltest` (`-keep` la deja). 48/48 PASS nov 24/2026 (antes de la fase 4 de VQL: 21 fallaban y la primera lista ni se podía guardar) | PostgreSQL con pgvector y las variables `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD`; no gasta |
 
 Siguen en `Demos/` dos consolas del mismo tipo porque el libro las cita por su ruta: `066-ComputerUseTest` (mueve el ratón de verdad) y `067-PromptCacheTest` (prompt caching de Claude).
 
@@ -35,7 +36,7 @@ Tests/Integration/068-AsyncHistoryTest/Win64/Release/AsyncHistoryTest.exe
 
 Los `.dproj` buscan el código en `..\..\..\Source\...` (un nivel más que en `Demos/`). Si se agrega un proyecto aquí, ajustar esa ruta y sumarlo a `IntegrationTests.groupproj`.
 
-Gastan dinero real (salvo 069 y 070): usar modelos baratos y no meterlas en un bucle.
+Gastan dinero real (salvo 069, 070 y 071): usar modelos baratos y no meterlas en un bucle.
 
 ## Navigation
 

@@ -850,11 +850,75 @@ end;
 
 { --- JSON --- }
 
+// Un valor de metadato como JSON. Una lista (VarArrayOf) es un arreglo JSON; antes VarToStr de
+// un arreglo lanzaba excepcion y un nodo con tags: ['a', 'b'] no se podia guardar en un driver
+function AiVariantToJSON(const V: Variant): TJSONValue;
+var
+  I: Integer;
+  Arr: TJSONArray;
+begin
+  if VarIsArray(V) then
+  begin
+    Arr := TJSONArray.Create;
+    try
+      for I := VarArrayLowBound(V, 1) to VarArrayHighBound(V, 1) do
+        Arr.AddElement(AiVariantToJSON(VarArrayGet(V, [I])));
+    except
+      Arr.Free;
+      raise;
+    end;
+    Exit(Arr);
+  end;
+  case VarType(V) and varTypeMask of
+    varSmallint, varInteger, varByte, varShortInt, varWord, varLongWord, varInt64:
+      Result := TJSONNumber.Create(Int64(V));
+    varSingle, varDouble, varCurrency:
+      Result := TJSONNumber.Create(Double(V));
+    varBoolean:
+      Result := TJSONBool.Create(Boolean(V));
+    varDate:
+      Result := TJSONString.Create(DateToISO8601(TDateTime(V), True));
+    varNull, varEmpty:
+      Result := TJSONNull.Create;
+  else
+    Result := TJSONString.Create(VarToStr(V));
+  end;
+end;
+
+// Lo inverso: numeros (enteros sin punto), booleanos, null, fechas ISO 8601, texto y listas
+function AiJSONToVariant(AValue: TJSONValue): Variant;
+var
+  I: Integer;
+  Arr: TJSONArray;
+  DT: TDateTime;
+begin
+  if AValue is TJSONArray then
+  begin
+    Arr := TJSONArray(AValue);
+    Result := VarArrayCreate([0, Arr.Count - 1], varVariant);
+    for I := 0 to Arr.Count - 1 do
+      Result[I] := AiJSONToVariant(Arr.Items[I]);
+  end
+  else if AValue is TJSONNumber then
+  begin
+    if ContainsText(AValue.ToJSON, '.') or ContainsText(AValue.ToJSON, 'e') then
+      Result := TJSONNumber(AValue).AsDouble
+    else
+      Result := TJSONNumber(AValue).AsInt64;
+  end
+  else if AValue is TJSONBool then
+    Result := TJSONBool(AValue).AsBoolean
+  else if AValue is TJSONNull then
+    Result := Null
+  else if TryISO8601ToDate(AValue.Value, DT) then
+    Result := DT
+  else
+    Result := AValue.Value;
+end;
+
 function TAiEmbeddingMetaData.ToJSON: TJSONObject;
 var
   Pair: TPair<string, Variant>;
-  JVal: TJSONValue;
-  V: Variant;
 begin
   Result := TJSONObject.Create;
   try
@@ -865,24 +929,7 @@ begin
       Result.AddPair('_data_text', FData.Text);
 
     for Pair in FProperties do
-    begin
-      V := Pair.Value;
-      case VarType(V) and varTypeMask of
-        varSmallint, varInteger, varByte, varShortInt, varWord, varLongWord, varInt64:
-          JVal := TJSONNumber.Create(Int64(V));
-        varSingle, varDouble, varCurrency:
-          JVal := TJSONNumber.Create(Double(V));
-        varBoolean:
-          JVal := TJSONBool.Create(Boolean(V));
-        varDate:
-          JVal := TJSONString.Create(DateToISO8601(TDateTime(V), True));
-        varNull, varEmpty:
-          JVal := TJSONNull.Create;
-      else
-        JVal := TJSONString.Create(VarToStr(V));
-      end;
-      Result.AddPair(Pair.Key, JVal);
-    end;
+      Result.AddPair(Pair.Key, AiVariantToJSON(Pair.Value));
   except
     Result.Free;
     raise;
@@ -894,7 +941,6 @@ var
   i: Integer;
   Pair: TJSONPair;
   S: string;
-  DT: TDateTime;
 begin
   if not Assigned(aJSON) then
     Exit;
@@ -909,26 +955,7 @@ begin
     else if SameText(S, '_data_text') then
       FData.Text := Pair.JsonValue.Value
     else
-    begin
-      if Pair.JsonValue is TJSONNumber then
-      begin
-        if ContainsText(Pair.JsonValue.ToJSON, '.') then
-          SetProperty(S, TJSONNumber(Pair.JsonValue).AsDouble)
-        else
-          SetProperty(S, TJSONNumber(Pair.JsonValue).AsInt64);
-      end
-      else if Pair.JsonValue is TJSONBool then
-        SetProperty(S, TJSONBool(Pair.JsonValue).AsBoolean)
-      else if Pair.JsonValue is TJSONNull then
-        SetProperty(S, Null)
-      else
-      begin
-        if TryISO8601ToDate(Pair.JsonValue.Value, DT) then
-          SetProperty(S, DT)
-        else
-          SetProperty(S, Pair.JsonValue.Value);
-      end;
-    end;
+      SetProperty(S, AiJSONToVariant(Pair.JsonValue));
   end;
 end;
 
