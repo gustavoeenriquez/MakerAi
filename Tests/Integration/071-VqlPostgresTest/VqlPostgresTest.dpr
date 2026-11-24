@@ -172,14 +172,17 @@ begin
   // Datos: numeros (enteros y decimales), numeros en texto, mayusculas, listas, booleanos,
   // fechas, claves que faltan, un precio que no es numero y una ruta con barras
   AddDoc('uno', ['autor', 'Ana', 'estado', 'activo', 'precio', 100, 'codigo', '10', 'tags', VarArrayOf(['cafe', 'te']),
-    'destacado', True, 'fecha', EncodeDate(2026, 1, 15), 'nota', 'Café de altura']);
+    'destacado', True, 'fecha', EncodeDate(2026, 1, 15), 'nota', 'Café de altura',
+    'medida', '1e3', 'patron', 'a*b']);
   AddDoc('dos', ['autor', 'Bruno', 'estado', 'borrador', 'precio', 200, 'codigo', '9', 'tags', VarArrayOf(['mate']),
-    'destacado', False, 'fecha', EncodeDate(2025, 12, 1), 'nota', 'Notas frutales']);
+    'destacado', False, 'fecha', EncodeDate(2025, 12, 1), 'nota', 'Notas frutales',
+    'medida', ' 42 ', 'patron', 'x[1]']);
   AddDoc('tres', ['autor', 'carla', 'estado', 'activo', 'precio', 300.5, 'codigo', '25', 'tags', VarArrayOf(['te']),
-    'destacado', True, 'fecha', EncodeDate(2026, 3, 1)]);
-  AddDoc('cuatro', ['autor', 'Dario', 'precio', 150.75]);
-  AddDoc('cinco', ['autor', 'O''Brien', 'estado', 'Activo', 'precio', -5, 'codigo', '-3', 'ruta', 'C:\docs\nuevo']);
-  AddDoc('seis', ['autor', 'Fede', 'estado', 'activo', 'precio', 'N/A', 'codigo', 'abc']);
+    'destacado', True, 'fecha', EncodeDate(2026, 3, 1), 'medida', '.5', 'patron', '50%']);
+  AddDoc('cuatro', ['autor', 'Dario', 'precio', 150.75, 'medida', '1.2.3', 'patron', 'x1']);
+  AddDoc('cinco', ['autor', 'O''Brien', 'estado', 'Activo', 'precio', -5, 'codigo', '-3', 'ruta', 'C:\docs\nuevo',
+    'medida', '2026-11-24']);
+  AddDoc('seis', ['autor', 'Fede', 'estado', 'activo', 'precio', 'N/A', 'codigo', 'abc', 'medida', 'A-10']);
 
   Writeln('Igualdad, mayusculas y listas');
   Check('SEARCH ''x''', [], '[Ana,Bruno,carla,Dario,Fede,O''Brien]');
@@ -237,6 +240,18 @@ begin
   Check('SEARCH ''x'' WHERE fecha > ''2026-01-01''', [], '[Ana,carla]');
   Check('SEARCH ''x'' WHERE fecha > $d', ['d', EncodeDate(2026, 1, 31)], '[carla]');
   Check('SEARCH ''x'' WHERE fecha BETWEEN ''2025-11-01'' AND ''2026-01-31''', []);
+
+  Writeln('Casos de borde: numeros escritos como texto y comodines');
+  Check('SEARCH ''x'' WHERE medida > 40', [], '[Ana,Bruno]');
+  Check('SEARCH ''x'' WHERE medida < 1', [], '[carla]');
+  Check('SEARCH ''x'' WHERE medida = 42', [], '[Bruno]');
+  Check('SEARCH ''x'' WHERE medida IN (''42'')', [], '[Bruno]');
+  Check('SEARCH ''x'' WHERE medida > ''2026-01-01''', []);
+  Check('SEARCH ''x'' WHERE patron LIKE ''a*b''', [], '[Ana]');
+  Check('SEARCH ''x'' WHERE patron LIKE ''x[1]''', [], '[Bruno]');
+  Check('SEARCH ''x'' WHERE patron LIKE ''x_''', [], '[Dario]');
+  Check('SEARCH ''x'' WHERE patron LIKE ''%\%''', [], '[carla]');
+  Check('SEARCH ''x'' WHERE patron CONTAINS ''[''', [], '[Bruno]');
 
   Writeln('Parametros');
   Check('SEARCH $q WHERE autor = $a', ['q', 'x', 'a', 'Ana'' OR ''1''=''1'], '[]');

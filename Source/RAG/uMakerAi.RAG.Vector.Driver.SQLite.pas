@@ -46,14 +46,18 @@ type
   TSQLiteFilterBuilder = class
   private
     FParamCounter: Integer;
+    FTable: string; // tabla con la que se califican las columnas (el JOIN con FTS5 repite id y content)
     FParamNames: TList<string>;
     FParamValues: TList<Variant>;
+    function Col(const AName: string): string;
     function BuildPath(const AKey: string): string;
+    function BuildJsonPath(const AKey: string): string;
+    function ConditionSQL(const C: TFilterCriterion): string;
     function Process(ACriteria: TAiFilterCriteria): string;
   public
     constructor Create;
     destructor Destroy; override;
-    function BuildSQL(ACriteria: TAiFilterCriteria): string;
+    function BuildSQL(ACriteria: TAiFilterCriteria; const ATable: string = ''): string;
     procedure ApplyParams(AQuery: TFDQuery);
   end;
 
@@ -157,36 +161,333 @@ begin
 end;
 
 function TSQLiteFilterBuilder.BuildPath(const AKey: string): string;
-var
-  Parts: TArray<string>;
-  I: Integer;
-  Path: string;
 begin
-  if SameText(AKey, 'text') or SameText(AKey, 'content') then Exit('content');
-  if SameText(AKey, 'model')  then Exit('model');
-  if SameText(AKey, 'id')     then Exit('id');
-
-  if AKey.Contains('.') then
-  begin
-    Parts := AKey.Split(['.']);
-    Path := '$.';
-    for I := 0 to High(Parts) do
-    begin
-      if I > 0 then Path := Path + '.';
-      Path := Path + Parts[I];
-    end;
-    Result := Format('json_extract(properties, ''%s'')', [Path]);
-  end
-  else
-    Result := Format('json_extract(properties, ''$.%s'')', [AKey]);
+  if SameText(AKey, 'text') or SameText(AKey, 'content') then Exit(Col('content'));
+  if SameText(AKey, 'model')  then Exit(Col('model'));
+  if SameText(AKey, 'id')     then Exit(Col('id'));
+  Result := 'json_extract(' + Col('properties') + ', ' + QuotedStr(BuildJsonPath(AKey)) + ')';
 end;
 
-function TSQLiteFilterBuilder.BuildSQL(ACriteria: TAiFilterCriteria): string;
+// Ruta JSON de SQLite con cada parte entre comillas dobles ($."precio", $."a"."b"): una clave
+// con espacios, puntos o comillas ya no rompe el SQL (antes se pegaba tal cual: $.mi clave)
+function TSQLiteFilterBuilder.BuildJsonPath(const AKey: string): string;
+var
+  Part: string;
 begin
+  Result := '$';
+  for Part in AKey.Split(['.']) do
+    Result := Result + '."' + Part.Replace('"', '').Replace(#0, '') + '"';
+end;
+
+function TSQLiteFilterBuilder.Col(const AName: string): string;
+begin
+  if FTable <> '' then
+    Result := FTable + '.' + AName
+  else
+    Result := AName;
+end;
+
+function TSQLiteFilterBuilder.BuildSQL(ACriteria: TAiFilterCriteria; const ATable: string): string;
+begin
+  FTable := ATable;
   FParamCounter := 0;
   FParamNames.Clear;
   FParamValues.Clear;
   Result := Process(ACriteria);
+end;
+
+// Traduce una condicion con la misma semantica que el filtro en memoria
+// (TAiEmbeddingMetaData.Evaluate / AiCompareValues) y que el driver de PostgreSQL. Todo va como
+// literal. Antes: CONTAINS era igualdad exacta; LIKE no distinguia mayusculas (el LIKE de SQLite
+// no las distingue en ASCII); los textos que parecen numeros ('10', '9') se comparaban como
+// texto y '10' > 9 no se cumplia; un 'N/A' en una columna de numeros cumplia cualquier '>'
+// (en SQLite un texto es mayor que cualquier numero); EXISTS_ANY/EXISTS_ALL no se traducian y
+// dejaban pasar todo.
+// - Numeros: el campo cuenta como numero si es un numero JSON o un texto que parece numero
+//   (GLOB, SQLite no trae expresiones regulares); si no, la condicion no se cumple.
+// - Texto: '=' distingue mayusculas; el orden no (desempata con ellas), como CompareText.
+// - LIKE con GLOB (distingue mayusculas, '%' y '_' traducidos); ILIKE con LIKE ... ESCAPE.
+// - CONTAINS, STARTS_WITH, ENDS_WITH sin mayusculas ni comodines; CONTAINS sobre una lista es
+//   pertenencia (json_each).
+// - NOT: un campo que falta no se cumple ni negado.
+// Diferencia conocida: lower/upper y LIKE de SQLite solo pliegan ASCII ('É' no es 'é'); en memoria
+// ILIKE y CONTAINS pliegan todo Unicode.
+function TSQLiteFilterBuilder.ConditionSQL(const C: TFilterCriterion): string;
+var
+  IsColumn: Boolean;
+  V, JT, T, Body, S: string;
+  Parts: TStringList;
+  Values: TArray<Variant>;
+  I: Integer;
+
+  function Q(const AText: string): string;
+  begin
+    Result := QuotedStr(AText.Replace(#0, ''));
+  end;
+
+  function IsNumType(const AVal: Variant): Boolean;
+  begin
+    Result := VarIsNumeric(AVal) and ((VarType(AVal) and varTypeMask) <> varBoolean);
+  end;
+
+  // Literal numerico: de un numero o de un texto que parece numero (como AiCompareValues)
+  function TryNumLit(const AVal: Variant; out ALit: string): Boolean;
+  var
+    D: Double;
+  begin
+    Result := False;
+    if VarIsArray(AVal) or VarIsNull(AVal) or VarIsEmpty(AVal) then
+      Exit;
+    if IsNumType(AVal) then
+    begin
+      ALit := AiFilterValueToText(AVal);
+      Exit(True);
+    end;
+    if ((VarType(AVal) and varTypeMask) <> varDate) and ((VarType(AVal) and varTypeMask) <> varBoolean) and
+      TryStrToFloat(Trim(VarToStr(AVal)), D, TFormatSettings.Invariant) then
+    begin
+      ALit := FloatToStr(D, TFormatSettings.Invariant);
+      Exit(True);
+    end;
+  end;
+
+  // El texto X parece un numero: [+-] digitos [. digitos] [e [+-] digitos], con espacios a los lados
+  function IsNumText(const X: string): string;
+  var
+    M: string;
+  begin
+    M := '(CASE WHEN substr(trim(' + X + '), 1, 1) IN (''+'', ''-'') THEN substr(trim(' + X + '), 2) ELSE trim(' + X + ') END)';
+    Result := '(' + M + ' <> '''' AND ' + M + ' NOT GLOB ''*[^0-9.eE+-]*'' AND ' + M + ' GLOB ''*[0-9]*'' AND ' +
+      M + ' NOT GLOB ''*.*.*'' AND ' + M + ' NOT GLOB ''*[eE]*[eE]*'' AND ' + M + ' NOT GLOB ''*[eE]*.*'' AND ' +
+      M + ' NOT GLOB ''[eE.]*[eE]*'' AND ' + M + ' NOT GLOB ''[eE]*'' AND ' + M + ' NOT GLOB ''*[eE]'' AND ' +
+      M + ' NOT GLOB ''*[eE][+-]'' AND ' + M + ' NOT GLOB ''[+-]*'' AND ' + M + ' NOT GLOB ''*[^eE][+-]*'')';
+  end;
+
+  // Valor numerico del campo (AV valor, AJT tipo JSON) o NULL si no es numero
+  function NumOf(const AV, AJT: string): string;
+  begin
+    Result := '(CASE WHEN ' + AJT + ' IN (''integer'', ''real'') THEN ' + AV + ' WHEN ' + AJT + ' = ''text'' AND ' +
+      IsNumText(AV) + ' THEN CAST(trim(' + AV + ') AS REAL) END)';
+  end;
+
+  function SqlOp(AOp: TFilterOperator): string;
+  begin
+    case AOp of
+      foNotEqual: Result := '<>';
+      foGreater: Result := '>';
+      foGreaterOrEqual: Result := '>=';
+      foLess: Result := '<';
+      foLessOrEqual: Result := '<=';
+    else
+      Result := '=';
+    end;
+  end;
+
+  // Texto contra texto: '=' y '<>' exactos; el orden como CompareText (upper de SQLite pliega
+  // solo ASCII, igual que CompareText) y, si empatan, con mayusculas
+  function TextCmp(const AT: string; AOp: TFilterOperator; const AS_: string): string;
+  var
+    StrictOp: string;
+  begin
+    if AOp in [foEqual, foNotEqual] then
+      Exit('(' + AT + ' ' + SqlOp(AOp) + ' ' + Q(AS_) + ')');
+    if AOp in [foGreater, foGreaterOrEqual] then
+      StrictOp := '>'
+    else
+      StrictOp := '<';
+    Result := '((upper(' + AT + ') ' + StrictOp + ' upper(' + Q(AS_) + ')) OR (upper(' + AT + ') = upper(' + Q(AS_) +
+      ') AND ' + AT + ' ' + SqlOp(AOp) + ' ' + Q(AS_) + '))';
+  end;
+
+  // Comparacion de un valor (AV, tipo JSON AJT) con AVal, como AiCompareValues
+  function Cmp(const AV, AJT: string; AOp: TFilterOperator; const AVal: Variant): string;
+  var
+    Lit, BoolOf: string;
+  begin
+    if VarIsNull(AVal) or VarIsEmpty(AVal) or VarIsArray(AVal) then
+      Exit('(NULL)');
+    case VarType(AVal) and varTypeMask of
+      varBoolean:
+        begin
+          BoolOf := '(CASE WHEN ' + AJT + ' = ''true'' THEN 1 WHEN ' + AJT + ' = ''false'' THEN 0 WHEN ' + AJT +
+            ' = ''text'' AND lower(trim(' + AV + ')) = ''true'' THEN 1 WHEN ' + AJT + ' = ''text'' AND lower(trim(' + AV +
+            ')) = ''false'' THEN 0 END)';
+          Exit('(' + BoolOf + ' ' + SqlOp(AOp) + ' ' + IfThen(Boolean(AVal), '1', '0') + ')');
+        end;
+      varDate:
+        Exit('((CASE WHEN ' + AJT + ' = ''text'' AND ' + AV + ' GLOB ''[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]*'' ' +
+          'THEN julianday(' + AV + ') END) ' + SqlOp(AOp) + ' julianday(' +
+          Q(FormatDateTime('yyyy-mm-dd"T"hh:nn:ss.zzz', VarToDateTime(AVal))) + '))');
+    end;
+    if TryNumLit(AVal, Lit) then
+    begin
+      if IsNumType(AVal) then
+        Exit('(' + NumOf(AV, AJT) + ' ' + SqlOp(AOp) + ' ' + Lit + ')');
+      // Texto que parece numero: como numero si el campo lo es; si no, como texto
+      Exit('(CASE WHEN ' + NumOf(AV, AJT) + ' IS NOT NULL THEN ' + NumOf(AV, AJT) + ' ' + SqlOp(AOp) + ' ' + Lit +
+        ' WHEN ' + AJT + ' = ''text'' THEN ' + TextCmp(AV, AOp, VarToStr(AVal)) + ' END)');
+    end;
+    // Texto que no es numero: solo contra textos (en memoria un numero o una lista no se comparan)
+    Result := '(' + AJT + ' = ''text'' AND ' + TextCmp(AV, AOp, VarToStr(AVal)) + ')';
+  end;
+
+  // El campo es una lista JSON y algun elemento es igual a AVal
+  function InList(const AVal: Variant): string;
+  begin
+    Result := 'EXISTS (SELECT 1 FROM json_each(' + Col('properties') + ', ' + Q(BuildJsonPath(C.Key)) + ') AS e WHERE ' +
+      Cmp('e.value', 'e.type', foEqual, AVal) + ')';
+  end;
+
+  function ValuesOf(const AVal: Variant): TArray<Variant>;
+  var
+    K: Integer;
+  begin
+    if VarIsArray(AVal) then
+    begin
+      SetLength(Result, VarArrayHighBound(AVal, 1) - VarArrayLowBound(AVal, 1) + 1);
+      for K := 0 to High(Result) do
+        Result[K] := VarArrayGet(AVal, [VarArrayLowBound(AVal, 1) + K]);
+    end
+    else
+      Result := [AVal];
+  end;
+
+  // LIKE de SQL (con la barra invertida de escape) como GLOB, que distingue mayusculas
+  function LikeToGlob(const APattern: string): string;
+  var
+    K: Integer;
+    Ch: Char;
+  begin
+    Result := '';
+    K := 1;
+    while K <= Length(APattern) do
+    begin
+      Ch := APattern[K];
+      if (Ch = #92) and (K < Length(APattern)) then
+      begin
+        Inc(K);
+        Ch := APattern[K];
+        if CharInSet(Ch, ['*', '?', '[']) then
+          Result := Result + '[' + Ch + ']'
+        else
+          Result := Result + Ch;
+      end
+      else if Ch = '%' then
+        Result := Result + '*'
+      else if Ch = '_' then
+        Result := Result + '?'
+      else if CharInSet(Ch, ['*', '?', '[']) then
+        Result := Result + '[' + Ch + ']'
+      else
+        Result := Result + Ch;
+      Inc(K);
+    end;
+  end;
+
+begin
+  IsColumn := SameText(C.Key, 'text') or SameText(C.Key, 'content') or SameText(C.Key, 'model') or SameText(C.Key, 'id');
+  if IsColumn then
+  begin
+    V := BuildPath(C.Key);
+    JT := '''text''';
+    T := V;
+  end
+  else
+  begin
+    V := BuildPath(C.Key);
+    JT := 'json_type(' + Col('properties') + ', ' + Q(BuildJsonPath(C.Key)) + ')';
+    // Texto del campo: los booleanos de JSON llegan como 1/0
+    T := '(CASE ' + JT + ' WHEN ''true'' THEN ''true'' WHEN ''false'' THEN ''false'' ELSE ' + V + ' END)';
+  end;
+
+  Parts := TStringList.Create;
+  try
+    case C.Op of
+      foEqual, foNotEqual, foGreater, foGreaterOrEqual, foLess, foLessOrEqual:
+        Body := Cmp(V, JT, C.Op, C.Value);
+
+      foBetween:
+        Body := '(' + Cmp(V, JT, foGreaterOrEqual, C.Value) + ' AND ' + Cmp(V, JT, foLessOrEqual, C.Value2) + ')';
+
+      foIn, foNotIn:
+        begin
+          Values := ValuesOf(C.Value);
+          for I := 0 to High(Values) do
+            Parts.Add(Cmp(V, JT, foEqual, Values[I]));
+          if Parts.Count = 0 then
+            Body := '(0)'
+          else
+            Body := '(' + String.Join(' OR ', Parts.ToStringArray) + ')';
+          // NOT IN: el campo existe y ningun valor es igual (un NULL adentro cuenta como distinto)
+          if C.Op = foNotIn then
+            Body := '((' + V + ') IS NOT NULL AND NOT COALESCE(' + Body + ', 0))';
+        end;
+
+      foLike:
+        Body := '(' + T + ' GLOB ' + Q(LikeToGlob(AiFilterValueToText(C.Value))) + ')';
+      foILike:
+        Body := '(' + T + ' LIKE ' + Q(AiFilterValueToText(C.Value)) + ' ESCAPE ' + QuotedStr(#92) + ')';
+
+      foContains:
+        begin
+          S := AiFilterValueToText(C.Value);
+          Body := '(instr(lower(' + T + '), lower(' + Q(S) + ')) > 0)';
+          if not IsColumn then
+            Body := '(CASE WHEN ' + JT + ' = ''array'' THEN ' + InList(C.Value) + ' ELSE ' + Body + ' END)';
+        end;
+
+      foStartsWith, foEndsWith:
+        begin
+          S := AiFilterValueToText(C.Value);
+          if S = '' then
+            Body := '((' + T + ') IS NOT NULL)'
+          else if C.Op = foStartsWith then
+            Body := '(substr(lower(' + T + '), 1, ' + IntToStr(Length(S)) + ') = lower(' + Q(S) + '))'
+          else
+            Body := '(substr(lower(' + T + '), -' + IntToStr(Length(S)) + ') = lower(' + Q(S) + '))';
+        end;
+
+      foExistsAny, foExistsAll:
+        if IsColumn then
+          Body := '(0)'
+        else
+        begin
+          Values := ValuesOf(C.Value);
+          for I := 0 to High(Values) do
+            Parts.Add(InList(Values[I]));
+          if Parts.Count = 0 then
+            Body := '(0)'
+          else
+            Body := '(' + JT + ' = ''array'' AND (' +
+              String.Join(IfThen(C.Op = foExistsAny, ' OR ', ' AND '), Parts.ToStringArray) + '))';
+        end;
+
+      foExists:
+        if IsColumn then
+          Body := '(1)'
+        else
+          Body := '(' + JT + ' IS NOT NULL)'; // la clave esta, aunque valga null
+
+      foIsNull:
+        Body := '(' + V + ' IS NULL)';
+      foIsNotNull:
+        Body := '(' + V + ' IS NOT NULL)';
+    else
+      Body := '(1=1)';
+    end;
+
+    // NOT de una condicion: como en memoria, un campo que falta (o NULL) no se cumple
+    if C.Negated then
+    begin
+      if C.Op in [foIsNull, foIsNotNull, foExists] then
+        Body := 'NOT ' + Body
+      else
+        Body := '((' + V + ') IS NOT NULL AND NOT COALESCE(' + Body + ', 0))';
+    end;
+    Result := Body;
+  finally
+    Parts.Free;
+  end;
 end;
 
 function TSQLiteFilterBuilder.Process(ACriteria: TAiFilterCriteria): string;
@@ -194,20 +495,7 @@ var
   I: Integer;
   Criterion: TFilterCriterion;
   Parts: TList<string>;
-  LogicStr, SubSQL, Path, PName: string;
-
-  function NextParam: string;
-  begin
-    Inc(FParamCounter);
-    Result := 'p_flt_' + IntToStr(FParamCounter);
-  end;
-
-  procedure AddParam(const AName: string; const AValue: Variant);
-  begin
-    FParamNames.Add(AName);
-    FParamValues.Add(AValue);
-  end;
-
+  LogicStr, SubSQL: string;
 begin
   Result := '';
   if (ACriteria = nil) or (ACriteria.Count = 0) then Exit;
@@ -237,76 +525,7 @@ begin
         Continue;
       end;
 
-      Path  := BuildPath(Criterion.Key);
-      PName := NextParam;
-
-      case Criterion.Op of
-        foEqual:        begin Parts.Add(Format('(%s = :%s)',  [Path, PName])); AddParam(PName, Criterion.Value); end;
-        foNotEqual:     begin Parts.Add(Format('(%s <> :%s)', [Path, PName])); AddParam(PName, Criterion.Value); end;
-        foGreater:      begin Parts.Add(Format('(%s > :%s)',  [Path, PName])); AddParam(PName, Criterion.Value); end;
-        foGreaterOrEqual: begin Parts.Add(Format('(%s >= :%s)', [Path, PName])); AddParam(PName, Criterion.Value); end;
-        foLess:         begin Parts.Add(Format('(%s < :%s)',  [Path, PName])); AddParam(PName, Criterion.Value); end;
-        foLessOrEqual:  begin Parts.Add(Format('(%s <= :%s)', [Path, PName])); AddParam(PName, Criterion.Value); end;
-
-        foLike, foILike: // SQLite LIKE es case-insensitive para ASCII por defecto
-          begin Parts.Add(Format('(%s LIKE :%s)', [Path, PName])); AddParam(PName, Criterion.Value); end;
-        foStartsWith:
-          begin Parts.Add(Format('(%s LIKE :%s)', [Path, PName])); AddParam(PName, VarToStr(Criterion.Value) + '%'); end;
-        foEndsWith:
-          begin Parts.Add(Format('(%s LIKE :%s)', [Path, PName])); AddParam(PName, '%' + VarToStr(Criterion.Value)); end;
-
-        foIn, foNotIn:
-          begin
-            if VarIsArray(Criterion.Value) then
-            begin
-              var InList := TList<string>.Create;
-              try
-                var J: Integer;
-                for J := VarArrayLowBound(Criterion.Value, 1) to VarArrayHighBound(Criterion.Value, 1) do
-                begin
-                  var SP := PName + '_in_' + IntToStr(J);
-                  InList.Add(':' + SP);
-                  AddParam(SP, VarArrayGet(Criterion.Value, [J]));
-                end;
-                var Op := IfThen(Criterion.Op = foIn, 'IN', 'NOT IN');
-                Parts.Add(Format('(%s %s (%s))', [Path, Op, String.Join(',', InList.ToArray)]));
-              finally
-                InList.Free;
-              end;
-            end
-            else
-            begin
-              var Op := IfThen(Criterion.Op = foIn, 'IN', 'NOT IN');
-              Parts.Add(Format('(%s %s (:%s))', [Path, Op, PName]));
-              AddParam(PName, Criterion.Value);
-            end;
-          end;
-
-        foBetween:
-          begin
-            Parts.Add(Format('(%s BETWEEN :%s_1 AND :%s_2)', [Path, PName, PName]));
-            AddParam(PName + '_1', Criterion.Value);
-            AddParam(PName + '_2', Criterion.Value2);
-          end;
-
-        foIsNull:    Parts.Add(Format('(%s IS NULL)',     [Path]));
-        foIsNotNull: Parts.Add(Format('(%s IS NOT NULL)', [Path]));
-
-        foExists:
-          // Verificar que la clave exista en el JSON properties
-          Parts.Add(Format('(json_type(properties, ''$.%s'') IS NOT NULL)', [Criterion.Key]));
-
-        foContains:
-          // Aproximación: valor exacto en la clave indicada
-          begin Parts.Add(Format('(%s = :%s)', [Path, PName])); AddParam(PName, Criterion.Value); end;
-
-      else
-        Parts.Add('(1=1)');
-      end;
-
-      // NOT LIKE, NOT BETWEEN...: NOT ( ... ); un campo que falta da NULL y no se cumple
-      if Criterion.Negated and (Parts.Count > 0) then
-        Parts[Parts.Count - 1] := 'NOT ' + Parts[Parts.Count - 1];
+      Parts.Add(ConditionSQL(Criterion));
     end;
 
     if Parts.Count > 0 then
@@ -857,10 +1076,11 @@ begin
     // JOIN FTS5 con tabla principal para recuperar todos los campos.
     // bm25() negativo → usamos -bm25() para tener valor positivo (mayor = mejor).
     SQL :=
-      'SELECT t.id, t.content, t.model, t.properties, t.embedding,' +
+      'SELECT ' + FTableName + '.id, ' + FTableName + '.content, ' + FTableName + '.model, ' +
+      FTableName + '.properties, ' + FTableName + '.embedding,' +
       '  (-bm25(' + FtsTableName + ')) AS raw_score ' +
       'FROM ' + FtsTableName + ' AS f ' +
-      'JOIN ' + FTableName + ' AS t ON t.entidad=f.entidad AND t.id=f.id ' +
+      'JOIN ' + FTableName + ' ON ' + FTableName + '.entidad=f.entidad AND ' + FTableName + '.id=f.id ' +
       'WHERE f.' + FtsTableName + ' MATCH :query AND f.entidad=:ent';
     if AFilterSQL <> '' then
       SQL := SQL + ' AND (' + AFilterSQL + ')';
@@ -1097,7 +1317,7 @@ begin
   try
     FilterSQL := '';
     if Assigned(AFilter) and (AFilter.Count > 0) then
-      FilterSQL := FB.BuildSQL(AFilter);
+      FilterSQL := FB.BuildSQL(AFilter, FTableName);
 
     if DoVector then
     begin

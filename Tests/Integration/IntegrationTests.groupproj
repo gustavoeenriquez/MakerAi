@@ -18,6 +18,9 @@
         <Projects Include="071-VqlPostgresTest\VqlPostgresTest.dproj">
             <Dependencies/>
         </Projects>
+        <Projects Include="072-VqlSQLiteTest\VqlSQLiteTest.dproj">
+            <Dependencies/>
+        </Projects>
     </ItemGroup>
     <ProjectExtensions>
         <Borland.Personality>Default.Personality.12</Borland.Personality>
@@ -71,14 +74,23 @@
     <Target Name="VqlPostgresTest:Make">
         <MSBuild Projects="071-VqlPostgresTest\VqlPostgresTest.dproj" Targets="Make"/>
     </Target>
+    <Target Name="VqlSQLiteTest">
+        <MSBuild Projects="072-VqlSQLiteTest\VqlSQLiteTest.dproj"/>
+    </Target>
+    <Target Name="VqlSQLiteTest:Clean">
+        <MSBuild Projects="072-VqlSQLiteTest\VqlSQLiteTest.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="VqlSQLiteTest:Make">
+        <MSBuild Projects="072-VqlSQLiteTest\VqlSQLiteTest.dproj" Targets="Make"/>
+    </Target>
     <Target Name="Build">
-        <CallTarget Targets="ClaudeChatTest;AsyncHistoryTest;McpSessionGateTest;GqlPostgresTest;VqlPostgresTest"/>
+        <CallTarget Targets="ClaudeChatTest;AsyncHistoryTest;McpSessionGateTest;GqlPostgresTest;VqlPostgresTest;VqlSQLiteTest"/>
     </Target>
     <Target Name="Clean">
-        <CallTarget Targets="ClaudeChatTest:Clean;AsyncHistoryTest:Clean;McpSessionGateTest:Clean;GqlPostgresTest:Clean;VqlPostgresTest:Clean"/>
+        <CallTarget Targets="ClaudeChatTest:Clean;AsyncHistoryTest:Clean;McpSessionGateTest:Clean;GqlPostgresTest:Clean;VqlPostgresTest:Clean;VqlSQLiteTest:Clean"/>
     </Target>
     <Target Name="Make">
-        <CallTarget Targets="ClaudeChatTest:Make;AsyncHistoryTest:Make;McpSessionGateTest:Make;GqlPostgresTest:Make;VqlPostgresTest:Make"/>
+        <CallTarget Targets="ClaudeChatTest:Make;AsyncHistoryTest:Make;McpSessionGateTest:Make;GqlPostgresTest:Make;VqlPostgresTest:Make;VqlSQLiteTest:Make"/>
     </Target>
     <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
 </Project>

@@ -202,6 +202,7 @@ Limit     : 5 / Offset: 0
 Fetch     : 15 candidates (extra rows for RERANK, DISTINCT or OFFSET)
 ```
 
-Motores: en memoria y con el driver de PostgreSQL los filtros dan los mismos resultados
-(prueba `Tests/Integration/071-VqlPostgresTest`). Los drivers de SQL Server y SQLite todavía
-conservan la semántica anterior (`CONTAINS` como igualdad, `LIKE` sin distinguir mayúsculas).
+Motores: en memoria y con los drivers de PostgreSQL y SQLite los filtros dan los mismos resultados
+(pruebas `Tests/Integration/071-VqlPostgresTest` y `072-VqlSQLiteTest`; en SQLite, `ILIKE` y
+`CONTAINS` solo ignoran mayúsculas en letras sin acento). El driver de SQL Server todavía
+conserva la semántica anterior (`CONTAINS` como igualdad, `LIKE` sin distinguir mayúsculas).
